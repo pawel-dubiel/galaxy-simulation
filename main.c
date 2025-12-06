@@ -3,8 +3,42 @@
 #include "font.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h> // For malloc/realloc/free
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
+
+// --- Cache Helpers ---
+void init_cache(GameState *state) {
+    state->visited_count = 0;
+    state->visited_capacity = 16;
+    state->visited_systems = (StarSystem*)malloc(sizeof(StarSystem) * state->visited_capacity);
+}
+
+int find_cached_system(GameState *state, int x, int y) {
+    for (int i = 0; i < state->visited_count; i++) {
+        if (state->visited_systems[i].x == x && state->visited_systems[i].y == y) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void cache_current_system(GameState *state) {
+    // Update or Add
+    int idx = find_cached_system(state, state->current_system.x, state->current_system.y);
+    if (idx != -1) {
+        // Update existing (save physics state)
+        state->visited_systems[idx] = state->current_system;
+    } else {
+        // Add new
+        if (state->visited_count >= state->visited_capacity) {
+            state->visited_capacity *= 2;
+            state->visited_systems = (StarSystem*)realloc(state->visited_systems, sizeof(StarSystem) * state->visited_capacity);
+        }
+        state->visited_systems[state->visited_count++] = state->current_system;
+    }
+}
+// ---------------------
 
 void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
     for (int w = 0; w < radius * 2; w++) {
@@ -35,6 +69,9 @@ int main(int argc, char* argv[]) {
     state.running = true;
     state.selected_planet_idx = -1;
     state.selected_star = false;
+    state.centered_planet_idx = -1;
+    state.system_center_offset.x = 0;
+    state.system_center_offset.y = 0;
     state.paused = false;
     state.time_speed = 1.0f;
     
@@ -42,6 +79,8 @@ int main(int argc, char* argv[]) {
     state.galaxy_camera_pos.x = 0;
     state.galaxy_camera_pos.y = 0;
     state.galaxy_zoom = 20.0;
+    
+    init_cache(&state);
 
     SDL_Event e;
     Uint32 last_time = SDL_GetTicks();
@@ -75,7 +114,16 @@ int main(int argc, char* argv[]) {
                             state.galaxy_camera_pos = state.camera_pos;
                             state.galaxy_zoom = state.zoom;
                             
-                            state.current_system = generate_system(ix, iy);
+                            // CHECK CACHE
+                            int cached_idx = find_cached_system(&state, ix, iy);
+                            if (cached_idx != -1) {
+                                printf("Loaded from cache.\n");
+                                state.current_system = state.visited_systems[cached_idx];
+                            } else {
+                                printf("Generating new.\n");
+                                state.current_system = generate_system(ix, iy);
+                            }
+                            
                             state.mode = VIEW_SYSTEM;
                             
                             // RESET FOR SYSTEM VIEW
@@ -84,11 +132,15 @@ int main(int argc, char* argv[]) {
                             state.zoom = 100.0; 
                             state.selected_planet_idx = -1;
                             state.selected_star = true;
+                            state.centered_planet_idx = -1;
+                            state.system_center_offset.x = 0;
+                            state.system_center_offset.y = 0;
                         }
                     } else {
                         // System View Click
-                        int cx = SCREEN_WIDTH/2;
-                        int cy = SCREEN_HEIGHT/2;
+                        int cx = SCREEN_WIDTH/2 - state.system_center_offset.x * state.zoom;
+                        int cy = SCREEN_HEIGHT/2 - state.system_center_offset.y * state.zoom;
+                        
                         state.selected_planet_idx = -1;
                         state.selected_star = false;
                         
@@ -96,6 +148,11 @@ int main(int argc, char* argv[]) {
                         float d_star = sqrt(pow(mx - cx, 2) + pow(my - cy, 2));
                         if (d_star < 30) {
                             state.selected_star = true;
+                            if (e.button.clicks == 2) {
+                                state.centered_planet_idx = -1; // Center star
+                                state.system_center_offset.x = 0;
+                                state.system_center_offset.y = 0;
+                            }
                         } else {
                             // Check Planets
                             for (int i=0; i<state.current_system.planet_count; i++) {
@@ -106,6 +163,9 @@ int main(int argc, char* argv[]) {
                                 float dist = sqrt(pow(mx - px, 2) + pow(my - py, 2));
                                 if (dist < 20) { // Click radius
                                     state.selected_planet_idx = i;
+                                    if (e.button.clicks == 2) {
+                                        state.centered_planet_idx = i;
+                                    }
                                     break;
                                 }
                             }
@@ -114,6 +174,9 @@ int main(int argc, char* argv[]) {
                 }
                 if (e.button.button == SDL_BUTTON_RIGHT) {
                     if (state.mode == VIEW_SYSTEM) {
+                        // SAVE TO CACHE
+                        cache_current_system(&state);
+                        
                         state.mode = VIEW_GALAXY;
                         // RESTORE GALAXY STATE
                         state.camera_pos = state.galaxy_camera_pos;
@@ -148,13 +211,22 @@ int main(int argc, char* argv[]) {
         }
 
         // Update Physics (System View)
-        if (state.mode == VIEW_SYSTEM && !state.paused) {
-            for (int i=0; i<state.current_system.planet_count; i++) {
-                state.current_system.planets[i].orbit_angle += state.current_system.planets[i].orbit_speed * dt * 0.5 * state.time_speed; 
-                // Moons
-                for (int m=0; m<state.current_system.planets[i].moon_count; m++) {
-                     state.current_system.planets[i].moons[m].orbit_angle += state.current_system.planets[i].moons[m].orbit_speed * dt * state.time_speed;
+        if (state.mode == VIEW_SYSTEM) {
+            if (!state.paused) {
+                for (int i=0; i<state.current_system.planet_count; i++) {
+                    state.current_system.planets[i].orbit_angle += state.current_system.planets[i].orbit_speed * dt * 0.5 * state.time_speed; 
+                    // Moons
+                    for (int m=0; m<state.current_system.planets[i].moon_count; m++) {
+                         state.current_system.planets[i].moons[m].orbit_angle += state.current_system.planets[i].moons[m].orbit_speed * dt * state.time_speed;
+                    }
                 }
+            }
+            
+            // Update Camera Tracking
+            if (state.centered_planet_idx != -1) {
+                Planet p = state.current_system.planets[state.centered_planet_idx];
+                state.system_center_offset.x = cos(p.orbit_angle) * p.orbit_dist;
+                state.system_center_offset.y = sin(p.orbit_angle) * p.orbit_dist;
             }
         }
 
@@ -202,8 +274,9 @@ int main(int argc, char* argv[]) {
             
         } else {
             // Draw System
-            int cx = SCREEN_WIDTH/2;
-            int cy = SCREEN_HEIGHT/2;
+            // Apply Camera Offset
+            int cx = SCREEN_WIDTH/2 - state.system_center_offset.x * state.zoom;
+            int cy = SCREEN_HEIGHT/2 - state.system_center_offset.y * state.zoom;
             
             // Star
             Uint32 c = state.current_system.star.color;
@@ -276,9 +349,6 @@ int main(int argc, char* argv[]) {
                 sprintf(buf, "Mass: %.2f Earths", p.mass);
                 draw_text(renderer, 10, y, buf, 1); y+=15;
                 
-                sprintf(buf, "Radius: %.2f Earths", p.radius);
-                draw_text(renderer, 10, y, buf, 1); y+=15;
-                
                 sprintf(buf, "Orbit: %.2f AU", p.orbit_dist);
                 draw_text(renderer, 10, y, buf, 1); y+=15;
                 
@@ -305,6 +375,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderPresent(renderer);
     }
 
+    free(state.visited_systems);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

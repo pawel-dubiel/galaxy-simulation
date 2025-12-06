@@ -91,6 +91,13 @@ typedef struct {
     float time_speed;
     int selected_planet_idx; // -1 for none
     bool selected_star;
+    int centered_planet_idx; // -1 for none (Star centered)
+    Vec2 system_center_offset; // Offset to center view on a body
+    
+    // Cache
+    StarSystem *visited_systems;
+    int visited_count;
+    int visited_capacity;
 } GameState;
 
 // Functions
