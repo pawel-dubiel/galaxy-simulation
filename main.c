@@ -276,7 +276,25 @@ int main(int argc, char* argv[]) {
                 sprintf(buf, "Mass: %.2f Earths", p.mass);
                 draw_text(renderer, 10, y, buf, 1); y+=15;
                 
+                sprintf(buf, "Radius: %.2f Earths", p.radius);
+                draw_text(renderer, 10, y, buf, 1); y+=15;
+                
                 sprintf(buf, "Orbit: %.2f AU", p.orbit_dist);
+                draw_text(renderer, 10, y, buf, 1); y+=15;
+                
+                sprintf(buf, "Temp: %.0f K", p.surface_temp);
+                draw_text(renderer, 10, y, buf, 1); y+=15;
+                
+                sprintf(buf, "Atmosphere: %s", p.atmosphere);
+                draw_text(renderer, 10, y, buf, 1); y+=15;
+                
+                sprintf(buf, "Gravity: %.2f g", p.gravity);
+                draw_text(renderer, 10, y, buf, 1); y+=15;
+                
+                sprintf(buf, "Locked: %s", p.is_tidally_locked ? "YES" : "NO");
+                draw_text(renderer, 10, y, buf, 1); y+=15;
+                
+                sprintf(buf, "Day: %.2f Days", p.rotation_period);
                 draw_text(renderer, 10, y, buf, 1); y+=15;
                 
                 sprintf(buf, "Moons: %d", p.moon_count);

@@ -19,6 +19,8 @@ typedef struct {
     float mass;
     float radius;
     float temp;
+    float luminosity; // Relative to Sol
+    float metallicity; // Log scale
     Uint32 color; // 0xRRGGBBAA
 } Star;
 
@@ -49,7 +51,17 @@ typedef struct {
     Uint32 color;
     PlanetType type;
     int moon_count;
-    Moon moons[4]; // Max 4 moons for simplicity in C
+    Moon moons[4];
+    
+    // Advanced Physics
+    float density; // g/cm3
+    float surface_temp; // K
+    char atmosphere[32];
+    float albedo;
+    float greenhouse; // K
+    bool is_tidally_locked;
+    float gravity; // g
+    float rotation_period; // Days
 } Planet;
 
 typedef struct {
