@@ -19,9 +19,12 @@ typedef struct {
     float mass;
     float radius;
     float temp;
-    float luminosity; // Relative to Sol
-    float metallicity; // Log scale
-    Uint32 color; // 0xRRGGBBAA
+    float luminosity; 
+    float metallicity; 
+    Uint32 color;
+    // Physics
+    float x, y;   // AU
+    float vx, vy; // AU/year
 } Star;
 
 typedef enum {
@@ -36,38 +39,42 @@ typedef enum {
 typedef struct {
     char name[32];
     float radius;
-    float orbit_dist; // Relative to planet
-    float orbit_angle;
-    float orbit_speed;
+    float orbit_dist; // Relative visual distance
+    float x, y;   // Angle/Speed in simulation or actual coords
+    float vx, vy;
 } Moon;
 
 typedef struct {
     char name[32];
     float mass;
     float radius;
-    float orbit_dist; // AU
-    float orbit_angle; // Radians
-    float orbit_speed; // Rad/sec
     Uint32 color;
     PlanetType type;
-    int moon_count;
-    Moon moons[4];
     
-    // Advanced Physics
-    float density; // g/cm3
-    float surface_temp; // K
+    // Physics
+    float x, y;   // AU
+    float vx, vy; // AU/year
+    
+    // Details
+    float density; 
+    float surface_temp; 
     char atmosphere[32];
     float albedo;
-    float greenhouse; // K
+    float greenhouse; 
     bool is_tidally_locked;
-    float gravity; // g
-    float rotation_period; // Days
+    float gravity; 
+    float rotation_period; 
+    float rotation_angle; // Current axial rotation
+    
+    int moon_count;
+    Moon moons[4];
 } Planet;
 
 typedef struct {
-    int x, y; // Galaxy Coordinates
+    int x, y; 
     unsigned int seed;
-    Star star;
+    int star_count;
+    Star stars[3];
     int planet_count;
     Planet planets[16];
 } StarSystem;
