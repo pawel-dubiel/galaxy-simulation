@@ -44,7 +44,22 @@ void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
     }
 }
 
+#include <string.h>
+
+// ...
+
 int main(int argc, char* argv[]) {
+    // Parse Arguments
+    for (int i=1; i<argc; i++) {
+        if (strncmp(argv[i], "--stars=", 8) == 0) {
+            int count = atoi(argv[i] + 8);
+            if (count >= 1 && count <= 3) {
+                set_forced_star_count(count);
+                printf("Forcing Star Count: %d\n", count);
+            }
+        }
+    }
+
     if (SDL_Init(SDL_INIT_VIDEO) < 0) return 1;
     SDL_Window* window = SDL_CreateWindow("C-Galaxy N-Body", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -297,6 +312,34 @@ int main(int argc, char* argv[]) {
                 sprintf(buf, "Atm: %s", p->atmosphere); draw_text(renderer, 10, y+=15, buf, 1);
                 sprintf(buf, "Locked: %s", p->is_tidally_locked?"YES":"NO"); draw_text(renderer, 10, y+=15, buf, 1);
                 sprintf(buf, "Day: %.2f Days", p->rotation_period); draw_text(renderer, 10, y+=15, buf, 1);
+                
+                sprintf(buf, "Moons: %d", p->moon_count); draw_text(renderer, 10, y+=15, buf, 1);
+                
+                draw_text(renderer, 10, y+=15, "RESOURCES:", 1);
+                // Find Top 3
+                for (int k=0; k<3; k++) {
+                    int max_idx = -1;
+                    float max_val = -1.0;
+                    for (int r=0; r<8; r++) {
+                        if (p->resources[r] > max_val) {
+                            bool used = false;
+                            // Check if already displayed (hacky sort)
+                            // To do this properly without modifying struct, we need a temp array or just print > threshold
+                            // Let's just print any > 10% for now or fix sort
+                        }
+                    }
+                }
+                // Simpler approach: Iterate and print all > 15%
+                const char* res_names[] = {"Iron", "Silicon", "Nickel", "Water", "Hydrogen", "Helium", "Gold", "RareEarths"};
+                int printed = 0;
+                for (int r=0; r<8; r++) {
+                    if (p->resources[r] > 15.0) {
+                        sprintf(buf, " %s: %.1f%%", res_names[r], p->resources[r]);
+                        draw_text(renderer, 10, y+=15, buf, 1);
+                        printed++;
+                    }
+                }
+                if (printed == 0) draw_text(renderer, 10, y+=15, " Trace Elements", 1);
             }
         }
         

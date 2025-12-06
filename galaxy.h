@@ -7,6 +7,7 @@
 
 #define SCREEN_WIDTH 1200
 #define SCREEN_HEIGHT 900
+#define MAX(x, y) (((x) > (y)) ? (x) : (y)) // Shared macro
 
 // Math
 typedef struct {
@@ -66,6 +67,10 @@ typedef struct {
     float rotation_period; 
     float rotation_angle; // Current axial rotation
     
+    // Resources (Percentages 0.0 - 100.0)
+    // 0:Iron, 1:Silicon, 2:Nickel, 3:Water, 4:Hydrogen, 5:Helium, 6:Gold, 7:RareEarths
+    float resources[8];
+    
     int moon_count;
     Moon moons[4];
 } Planet;
@@ -111,6 +116,7 @@ typedef struct {
 unsigned int get_seed(int x, int y);
 bool star_exists(int x, int y);
 StarSystem generate_system(int x, int y);
-float rand_float(float min, float max); // Shared helper
+float rand_float(float min, float max); 
+void set_forced_star_count(int count); // New
 
 #endif
