@@ -261,7 +261,7 @@ int main(int argc, char* argv[]) {
     Uint32 last_time = SDL_GetTicks();
     
     // Input State
-    bool k_up=0, k_down=0, k_left=0, k_right=0, k_q=0, k_e=0, k_w=0, k_s=0, k_a=0, k_d=0, k_r=0, k_f=0;
+    bool k_q=0, k_e=0, k_w=0, k_s=0, k_a=0, k_d=0, k_r=0, k_f=0;
 
     while (state.running) {
         Uint32 current_time = SDL_GetTicks();
