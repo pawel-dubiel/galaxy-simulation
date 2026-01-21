@@ -118,6 +118,9 @@ typedef struct {
     bool selected_star;
     int centered_planet_idx;
     
+    // Rendering
+    SDL_Texture *body_texture;
+    
     // Cache
     StarSystem *visited_systems;
     int visited_count;

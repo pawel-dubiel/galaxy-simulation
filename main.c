@@ -64,6 +64,43 @@ void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
     }
 }
 
+SDL_Texture* create_circle_texture(SDL_Renderer* renderer, int radius) {
+    // Create a texture to act as our sprite
+    int size = radius * 2;
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, size, size);
+    if (!texture) return NULL;
+    
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    
+    SDL_SetRenderTarget(renderer, texture);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); // Transparent background
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); // White circle
+    
+    // Draw filled circle (reuse naive algo for generation, done once so ok)
+    for (int w = 0; w < size; w++) {
+        for (int h = 0; h < size; h++) {
+            int dx = radius - w;
+            int dy = radius - h;
+            if ((dx*dx + dy*dy) <= (radius * radius)) {
+                // Simple anti-aliasing attempt: Distance check
+                float dist = sqrtf(dx*dx + dy*dy);
+                if (dist > radius - 1.0f) {
+                     int alpha = 255 * (1.0f - (dist - (radius - 1.0f)));
+                     SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
+                     SDL_RenderDrawPoint(renderer, w, h);
+                } else {
+                     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                     SDL_RenderDrawPoint(renderer, w, h);
+                }
+            }
+        }
+    }
+
+    SDL_SetRenderTarget(renderer, NULL); // Reset to window
+    return texture;
+}
+
 void draw_crosshair(SDL_Renderer *renderer) {
     int cx = SCREEN_WIDTH / 2;
     int cy = SCREEN_HEIGHT / 2;
@@ -168,8 +205,11 @@ void render_system_3d(SDL_Renderer *renderer, GameState *state, Vec3 cam_pos, Ma
     for (int i=0; i<item_count; i++) {
         RenderItem *it = &items[i];
         Uint32 c = it->color;
-        SDL_SetRenderDrawColor(renderer, (c>>24)&0xFF, (c>>16)&0xFF, (c>>8)&0xFF, 255);
-        draw_circle(renderer, it->x, it->y, it->r);
+        
+        SDL_SetTextureColorMod(state->body_texture, (c>>24)&0xFF, (c>>16)&0xFF, (c>>8)&0xFF);
+        SDL_SetTextureAlphaMod(state->body_texture, 255);
+        SDL_Rect dst = {it->x - it->r, it->y - it->r, it->r*2, it->r*2};
+        SDL_RenderCopy(renderer, state->body_texture, NULL, &dst);
         
         // HUD Marker (Green Box around object)
         if (!it->is_star && !show_boundary) { // Don't show markers in tactical view to keep it clean? Or keep them? Let's keep them if not tactical, or just keep them always. Plan said nothing, but tactical usually implies clean.
@@ -208,6 +248,11 @@ int main(int argc, char* argv[]) {
     state.player.throttle = 0.0f;
     
     init_cache(&state);
+    
+    // Init Texture
+    state.body_texture = create_circle_texture(renderer, 64);
+    if (!state.body_texture) printf("Failed to create texture\n");
+    
     for (int i=1; i<argc; i++) {
         if (strncmp(argv[i], "--stars=", 8) == 0) set_forced_star_count(atoi(argv[i] + 8));
     }
@@ -366,8 +411,13 @@ int main(int argc, char* argv[]) {
                         unsigned int s = get_seed(x,y); srand(s);
                         int r=255,g=255,b=255; 
                         if (rand()%2==0) {r=200; g=200;}
-                        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-                        draw_circle(renderer, sx, sy, MAX(2, state.map_zoom/5));
+                        
+                        int radius = MAX(2, state.map_zoom/5);
+                        SDL_Rect dst = {sx - radius, sy - radius, radius * 2, radius * 2};
+                        
+                        SDL_SetTextureColorMod(state.body_texture, r, g, b);
+                        SDL_SetTextureAlphaMod(state.body_texture, 255);
+                        SDL_RenderCopy(renderer, state.body_texture, NULL, &dst);
                     }
                 }
             }
@@ -425,6 +475,9 @@ int main(int argc, char* argv[]) {
         SDL_RenderPresent(renderer);
     }
 
+
+
+    if (state.body_texture) SDL_DestroyTexture(state.body_texture);
     free(state.visited_systems);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
