@@ -1,0 +1,9 @@
+# Object files
+*.o
+
+# Binaries
+galaxy
+
+# macOS
+.DS_Store
+*.dSYM/
