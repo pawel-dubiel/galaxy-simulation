@@ -202,6 +202,7 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
     const float DISK_THICKNESS = 1.0f;      // Thin disk ~1 kLY (exaggerated for visibility)
     const float SUN_DISTANCE = 26.0f;       // Sun at ~26 kLY from center
     const float V_FLAT = 220.0f;            // Rotation velocity km/s
+    const float BAR_ANGLE = 0.45f;          // Angle of the bar
     
     // Spiral arm parameters (4 main arms)
     // Arms start from ends of the bar
@@ -209,35 +210,70 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
     
     srand(42);
     
-    // Distribution: 5% nuclear bulge, 12% bar, 55% spiral arms, 23% disk, 5% halo/clusters
-    int bulge_count = star_count * 5 / 100;
-    int bar_count = star_count * 12 / 100;
-    int arm_count = star_count * 55 / 100;
-    int disk_count = star_count * 23 / 100;
+    // Distribution:
+    // 15% Bulge (Dense, Rugby Ball)
+    // 10% Bar (Elongated)
+    // 40% Spiral Arms (Thin, Young)
+    // 15% Thin Disk (Background)
+    // 10% Thick Disk (Older, thicker)
+    // 10% Halo (Split 7% Inner, 3% Outer)
+    
+    int bulge_count = star_count * 15 / 100;
+    int bar_count = star_count * 10 / 100;
+    int arm_count = star_count * 40 / 100;
+    int thin_disk_count = star_count * 15 / 100;
+    int thick_disk_count = star_count * 10 / 100;
+    // Remainder is halo
+    
     int idx = 0;
     
-    // ===== NUCLEAR BULGE (Old Population II, very high density, bright) =====
+    // ===== NUCLEAR BULGE (Prolate / Rugby Ball Shape) =====
+    // Structurally aligned with the bar, but thicker
     for (int i = 0; i < bulge_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
-        // Very concentrated exponential distribution
-        float u = rand_float(0.001, 1.0);
-        float r = -BULGE_RADIUS * 0.3f * logf(u);
-        if (r > BULGE_RADIUS) r = rand_float(0.05, BULGE_RADIUS);
+        // Generate in local aligned coordinates
+        // We want a prolate spheroid: Long axis X (Bar), Short axis Y/Z
         
-        float theta = rand_float(0, 6.28318530718);
+        float u = rand_float(0.001, 1.0);
+        float d_base = -logf(u) * 0.4f; // Exponential density falloff
+        if (d_base > 2.0) d_base = rand_float(0.1, 2.0); // Clamp tails
+        
+        // Random direction on sphere
+        float theta_rand = rand_float(0, 6.2831853);
+        float phi_rand = acosf(rand_float(-1, 1));
+        
+        // Unit sphere coordinates
+        float ux = sinf(phi_rand) * cosf(theta_rand);
+        float uy = sinf(phi_rand) * sinf(theta_rand);
+        float uz = cosf(phi_rand);
+        
+        // Stretch to creating rugby ball shape
+        // Elongate along bar axis (X in local frame)
+        float lx = ux * d_base * BULGE_RADIUS * 2.5f; // Longer
+        float ly = uy * d_base * BULGE_RADIUS * 1.2f; // Wider than sphere
+        float lz = uz * d_base * BULGE_RADIUS * 1.0f; // Tall
+        
+        // Rotate by BAR_ANGLE to world space
+        float x = lx * cosf(BAR_ANGLE) - ly * sinf(BAR_ANGLE);
+        float y = lx * sinf(BAR_ANGLE) + ly * cosf(BAR_ANGLE);
+        
+        float r = sqrtf(x*x + y*y);
+        float theta = atan2f(y, x);
         
         s->orbit_radius = r;
         s->orbit_angle = theta;
-        s->z_offset = rand_float(-0.6, 0.6) * (1.0 - r/BULGE_RADIUS); // Spherical bulge, slightly flattened
+        s->z_offset = lz;
         
         s->orbit_speed = V_FLAT * (r / BULGE_RADIUS) * 0.5 / (r * 3.086e16) * 3.154e7;
         
         // BULGE: Old, metal-rich giants. High surface brightness.
         // Extremely bright core, yellow-white.
-        // Brightness decays slightly with radius.
+        // Brightness decays with distance from center (3D)
+        float dist_3d = sqrtf(lx*lx + ly*ly + lz*lz);
         int base_bright = 230 + rand() % 25;
-        float r_factor = 1.0f - (r / BULGE_RADIUS) * 0.3f; // Center is brighter
+        float r_factor = 1.0f - (dist_3d / (BULGE_RADIUS * 2.0f)) * 0.5f; 
+        if (r_factor < 0.2) r_factor = 0.2;
         int final_bright = (int)(base_bright * r_factor);
         if (final_bright > 255) final_bright = 255;
         
@@ -245,8 +281,8 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         // R=255, G=200-240, B=100-180
         s->color = (final_bright << 24) | ((final_bright - 20) << 16) | ((final_bright - 80) << 8) | 0xFF;
         
-        s->grid_x = (int)(cosf(theta) * r * 10);
-        s->grid_y = (int)(sinf(theta) * r * 10);
+        s->grid_x = (int)(x * 10);
+        s->grid_y = (int)(y * 10);
         s->seed = get_seed(s->grid_x, s->grid_y);
     }
     
@@ -254,7 +290,7 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
     for (int i = 0; i < bar_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
-        float bar_angle = 0.45f;
+        // float bar_angle = 0.45f; // Use constant
         float u = rand_float(0.001, 1.0);
         float bar_x = -BAR_LENGTH * 0.7f * logf(u) * (rand() % 2 == 0 ? 1 : -1);
         if (fabsf(bar_x) > BAR_LENGTH) bar_x = rand_float(-BAR_LENGTH, BAR_LENGTH) * 0.8f;
@@ -265,8 +301,8 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         bar_x += rand_float(-0.5, 0.5);
         bar_y += rand_float(-0.3, 0.3);
         
-        float x = bar_x * cosf(bar_angle) - bar_y * sinf(bar_angle);
-        float y = bar_x * sinf(bar_angle) + bar_y * cosf(bar_angle);
+        float x = bar_x * cosf(BAR_ANGLE) - bar_y * sinf(BAR_ANGLE);
+        float y = bar_x * sinf(BAR_ANGLE) + bar_y * cosf(BAR_ANGLE);
         
         float r = sqrtf(x*x + y*y);
         float theta = atan2f(y, x);
@@ -274,7 +310,11 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_radius = r;
         s->orbit_angle = theta;
-        s->z_offset = rand_float(-0.3, 0.3) * width_scale;
+        
+        // Thicken the bar vertically to blend with the rugby-ball bulge
+        // Peanut shape: thicker at ends? Or just thick general?
+        // Let's make it fairly thick to match the "squashed sphere/rugby" vibe
+        s->z_offset = rand_float(-0.8, 0.8) * width_scale;
         
         float pattern_speed = V_FLAT * 0.4 / (BAR_LENGTH * 3.086e16) * 3.154e7;
         s->orbit_speed = pattern_speed + (V_FLAT / (r * 3.086e16) * 3.154e7 - pattern_speed) * 0.3;
@@ -298,12 +338,12 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         GalaxyStar *s = &galaxy->stars[idx];
         
         int arm = rand() % 4;
-        float bar_angle = 0.45f;
+        // float bar_angle = 0.45f; // Use constant
         float arm_start;
-        if (arm == 0) arm_start = bar_angle;
-        else if (arm == 1) arm_start = bar_angle + 1.5707963f;
-        else if (arm == 2) arm_start = bar_angle + 3.14159f;
-        else arm_start = bar_angle + 4.712389f;
+        if (arm == 0) arm_start = BAR_ANGLE;
+        else if (arm == 1) arm_start = BAR_ANGLE + 1.5707963f;
+        else if (arm == 2) arm_start = BAR_ANGLE + 3.14159f;
+        else arm_start = BAR_ANGLE + 4.712389f;
         
         float min_r = BAR_LENGTH * 0.5f;
         float r = min_r + powf(rand_float(0, 1), 0.5) * (GALAXY_RADIUS - min_r);
@@ -342,8 +382,8 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         s->seed = get_seed(s->grid_x, s->grid_y);
     }
     
-    // ===== THIN DISK (Background Population I/II) =====
-    for (int i = 0; i < disk_count && idx < star_count; i++, idx++) {
+    // ===== THIN DISK (Background Population I) =====
+    for (int i = 0; i < thin_disk_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
         // Exponential disk
@@ -376,23 +416,77 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         s->seed = get_seed(s->grid_x, s->grid_y);
     }
     
-    // ===== STELLAR HALO (Old Population II, poor metals) =====
-    for (; idx < star_count; idx++) {
+    // ===== THICK DISK (Old Population II, Thicker, Dimmer) =====
+    for (int i = 0; i < thick_disk_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
-        float r = rand_float(5.0, GALAXY_RADIUS * 1.5);
+        // Similar radial distribution to Thin Disk, maybe slightly more enhancing the center
+        float u = rand_float(0.01, 1.0);
+        float r = -12.0f * logf(u); // Scale length slightly shorter? Or similar.
+        if (r > GALAXY_RADIUS) r = rand_float(BAR_LENGTH, GALAXY_RADIUS);
+        if (r < BAR_LENGTH) r = rand_float(BAR_LENGTH, GALAXY_RADIUS * 0.8);
+        
         float theta = rand_float(0, 6.28318530718);
         
         s->orbit_radius = r;
         s->orbit_angle = theta;
-        s->z_offset = rand_float(-20.0, 20.0) * powf(rand_float(0, 1), 0.5);
         
-        s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7 * rand_float(0.3, 1.5);
+        // Much thicker! 1kLY -> 3-4kLY scale
+        s->z_offset = rand_float(-3.0, 3.0) * powf(rand_float(0, 1), 0.7);
         
-        // HALO: Dim, Reddish/Orange.
-        int brightness = 80 + rand() % 40; // Quite dim
+        s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7 * 0.9; // Slightly slower lag
         
-        s->color = (brightness << 24) | ((brightness - 20) << 16) | ((brightness - 40) << 8) | 0xFF;
+        // Dimmer, Orange/Red
+        int base = 80 + rand() % 80;
+        // Radial gradient
+        float radial_boost = 1.0f + (1.0f - (r / GALAXY_RADIUS)) * 0.4f;
+         int brightness = (int)(base * radial_boost);
+        if (brightness > 255) brightness = 255;
+        
+        // Stronger Orange/Red tint for old population
+        s->color = (brightness << 24) | ((brightness - 30) << 16) | ((brightness - 60) << 8) | 0xFF;
+        
+        s->grid_x = (int)(cosf(theta) * r * 10);
+        s->grid_y = (int)(sinf(theta) * r * 10);
+        s->seed = get_seed(s->grid_x, s->grid_y);
+    }
+    
+    // ===== HALO (Inner vs Outer) =====
+    // Remaining stars go here
+    for (; idx < star_count; idx++) {
+        GalaxyStar *s = &galaxy->stars[idx];
+        
+        // Split Inner/Outer probability
+        bool is_inner = (rand() % 100 < 70); 
+        
+        float r, z;
+        if (is_inner) {
+             // Inner Halo: 5 - 40 kLY, somewhat flattened
+             r = rand_float(5.0, 40.0);
+             float z_scale = rand_float(5.0, 15.0);
+             z = rand_float(-1.0, 1.0) * z_scale;
+        } else {
+             // Outer Halo: Very distant, spherical
+             r = rand_float(20.0, 80.0); // Up to 80kLY
+             float theta_sph = rand_float(0, 6.28);
+             float phi_sph = acosf(rand_float(-1, 1));
+             z = r * cosf(phi_sph); // Convert to Z
+             r = r * sinf(phi_sph); // Convert to projected R
+        }
+
+        float theta = rand_float(0, 6.28318530718);
+        
+        s->orbit_radius = r;
+        s->orbit_angle = theta;
+        s->z_offset = z;
+        
+        s->orbit_speed = V_FLAT / (MAX(r, 0.1) * 3.086e16) * 3.154e7 * rand_float(0.5, 1.2);
+        
+        // Very Dim
+        int brightness = 50 + rand() % 50; 
+        
+        // Reddish
+        s->color = (brightness << 24) | ((brightness - 10) << 16) | ((brightness - 40) << 8) | 0xFF;
         
         s->grid_x = (int)(cosf(theta) * r * 10);
         s->grid_y = (int)(sinf(theta) * r * 10);
