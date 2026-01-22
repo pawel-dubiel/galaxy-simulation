@@ -378,15 +378,6 @@ int main(int argc, char* argv[]) {
                     if (k == SDLK_e) k_e = down; // Roll Right
                     if (k == SDLK_r) k_r = down; // Throttle Up
                     if (k == SDLK_f) k_f = down; // Throttle Down
-                    // Time controls also in tactical/cockpit
-                    if (k == SDLK_LEFTBRACKET && down) {
-                        state.time_speed /= 2.0;
-                        if (state.time_speed < 0.0625) state.time_speed = 0.0625;
-                    }
-                    if (k == SDLK_RIGHTBRACKET && down) {
-                        state.time_speed *= 2.0;
-                        if (state.time_speed > 4096.0) state.time_speed = 4096.0;
-                    }
                 }
             }
             if (e.type == SDL_MOUSEWHEEL && state.mode == VIEW_GALAXY) state.map_zoom *= (e.wheel.y > 0 ? 1.1 : 0.9);
@@ -429,7 +420,7 @@ int main(int argc, char* argv[]) {
 
             // Keplerian Orbit Simulation
             if (!state.paused) {
-                float sim_dt = dt * state.time_speed * 0.5f; // ~3 days per frame at 1.0x speed
+                float sim_dt = dt * 1.0f * 0.5f; // Fixed 1.0 speed for tactical/cockpit view (~3 days per frame)
                 
                 for (int i=0; i<state.current_system.planet_count; i++) {
                     Planet *p = &state.current_system.planets[i];
@@ -586,8 +577,8 @@ int main(int argc, char* argv[]) {
                  
                  SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
                  char tac_text[256];
-                 sprintf(tac_text, "TACTICAL%s | T: Cockpit | [ ]: Time x%.1f", 
-                    state.paused ? " [PAUSED]" : "", state.time_speed);
+                 sprintf(tac_text, "TACTICAL%s | T: Cockpit", 
+                    state.paused ? " [PAUSED]" : "");
                  draw_text(renderer, 10, 10, tac_text, 2);
             }
         }
