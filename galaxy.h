@@ -59,6 +59,8 @@ typedef struct {
     float orbit_radius;
     float orbit_angle;
     float orbit_speed;
+    float eccentricity;
+    float inclination;
     
     // Details
     float density; 
