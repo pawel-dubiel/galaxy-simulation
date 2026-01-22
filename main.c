@@ -236,6 +236,7 @@ int main(int argc, char* argv[]) {
     state.mode = VIEW_GALAXY;
     state.map_cam_pos = (Vec3){0,0,0};
     state.map_zoom = 20.0;
+    state.map_tilt = 0.6f;     // ~35 degrees tilt for 3D view
     state.running = true;
     state.paused = false;
     state.time_speed = 1.0f;
@@ -349,13 +350,22 @@ int main(int argc, char* argv[]) {
                     if (k == SDLK_DOWN) state.map_cam_pos.y += 10.0/state.map_zoom*20;
                     if (k == SDLK_EQUALS || k == SDLK_PLUS) state.map_zoom *= 1.1;
                     if (k == SDLK_MINUS) state.map_zoom /= 1.1;
+                    // Tilt controls
+                    if (k == SDLK_w) {
+                        state.map_tilt -= 0.05;
+                        if (state.map_tilt < 0) state.map_tilt = 0;
+                    }
+                    if (k == SDLK_s) {
+                        state.map_tilt += 0.05;
+                        if (state.map_tilt > 1.4) state.map_tilt = 1.4; // ~80 degrees max
+                    }
                     if (k == SDLK_LEFTBRACKET && down) {
                         state.time_speed /= 2.0;
-                        if (state.time_speed < 0.0625) state.time_speed = 0.0625; // Min: 1/16x
+                        if (state.time_speed < 0.0625) state.time_speed = 0.0625;
                     }
                     if (k == SDLK_RIGHTBRACKET && down) {
                         state.time_speed *= 2.0;
-                        if (state.time_speed > 4096.0) state.time_speed = 4096.0; // Max: 4096x
+                        if (state.time_speed > 4096.0) state.time_speed = 4096.0;
                     }
                 } else {
                     // Ship Controls
@@ -439,36 +449,52 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
 
         if (state.mode == VIEW_GALAXY) {
-            // Galaxy Map Render - Rotating Milky Way
-            // Calculate view bounds for frustum culling
+            // Galaxy Map Render - Rotating Milky Way with 3D perspective
             float view_w_ly = SCREEN_WIDTH / state.map_zoom;
             float view_h_ly = SCREEN_HEIGHT / state.map_zoom;
+            
+            // Precompute tilt transformation
+            float cos_tilt = cosf(state.map_tilt);
+            float sin_tilt = sinf(state.map_tilt);
             
             // Render all visible stars
             for (int i = 0; i < state.galaxy.star_count; i++) {
                 GalaxyStar *gs = &state.galaxy.stars[i];
                 
-                // Calculate current position based on orbit
+                // Calculate current 3D position based on orbit
                 float current_angle = gs->orbit_angle + gs->orbit_speed * state.galaxy.time;
-                float x_ly = cosf(current_angle) * gs->orbit_radius;
-                float y_ly = sinf(current_angle) * gs->orbit_radius;
+                float x_3d = cosf(current_angle) * gs->orbit_radius;
+                float y_3d = sinf(current_angle) * gs->orbit_radius;
+                float z_3d = gs->z_offset;
                 
-                // Frustum culling
-                if (fabsf(x_ly - state.map_cam_pos.x) > view_w_ly / 2 + 5) continue;
-                if (fabsf(y_ly - state.map_cam_pos.y) > view_h_ly / 2 + 5) continue;
+                // Apply camera tilt (rotate around X axis)
+                // This compresses Y and adds Z contribution
+                float y_tilted = y_3d * cos_tilt - z_3d * sin_tilt;
+                float z_tilted = y_3d * sin_tilt + z_3d * cos_tilt;
+                
+                // Frustum culling (use tilted coordinates)
+                if (fabsf(x_3d - state.map_cam_pos.x) > view_w_ly / 2 + 10) continue;
+                if (fabsf(y_tilted - state.map_cam_pos.y) > view_h_ly / 2 + 10) continue;
                 
                 // Project to screen
-                int sx = (x_ly - state.map_cam_pos.x) * state.map_zoom + SCREEN_WIDTH/2;
-                int sy = (y_ly - state.map_cam_pos.y) * state.map_zoom + SCREEN_HEIGHT/2;
+                int sx = (x_3d - state.map_cam_pos.x) * state.map_zoom + SCREEN_WIDTH/2;
+                int sy = (y_tilted - state.map_cam_pos.y) * state.map_zoom + SCREEN_HEIGHT/2;
                 
-                // Calculate size based on zoom
-                int radius = MAX(1, (int)(state.map_zoom / 8));
+                // Size based on zoom + depth (closer = bigger)
+                float depth_factor = 1.0f + z_tilted * 0.05f;
+                int radius = MAX(1, (int)(state.map_zoom / 10 * depth_factor));
                 
-                // Extract color
+                // Extract color with depth-based brightness
                 Uint32 c = gs->color;
                 int r = (c >> 24) & 0xFF;
                 int g = (c >> 16) & 0xFF;
                 int b = (c >> 8) & 0xFF;
+                
+                // Slight brightness variation based on depth
+                float bright = 0.8f + z_tilted * 0.02f;
+                if (bright > 1.0f) bright = 1.0f;
+                if (bright < 0.5f) bright = 0.5f;
+                r = (int)(r * bright); g = (int)(g * bright); b = (int)(b * bright);
                 
                 // Render star
                 SDL_Rect dst = {sx - radius, sy - radius, radius * 2, radius * 2};
@@ -477,10 +503,9 @@ int main(int argc, char* argv[]) {
                 SDL_RenderCopy(renderer, state.body_texture, NULL, &dst);
             }
             
-            
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             char ui_text[256];
-            sprintf(ui_text, "GALAXY MAP | Click Star | SPACE: Pause | [ ]: Time x%.1f", state.time_speed);
+            sprintf(ui_text, "GALAXY | W/S: Tilt | [ ]: Time x%.1f | SPACE: Pause", state.time_speed);
             draw_text(renderer, 10, 10, ui_text, 2);
 
             

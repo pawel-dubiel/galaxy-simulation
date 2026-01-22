@@ -122,6 +122,7 @@ typedef struct {
     // Galaxy View Camera
     Vec3 map_cam_pos;
     float map_zoom;
+    float map_tilt;        // Camera tilt angle (0 = top-down, PI/2 = edge-on)
     
     // Galaxy Simulation
     Galaxy galaxy;
