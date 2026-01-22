@@ -279,11 +279,12 @@ int main(int argc, char* argv[]) {
                 if (state.mode == VIEW_GALAXY) {
                     if (e.button.button == SDL_BUTTON_LEFT) {
                         int mx, my; SDL_GetMouseState(&mx, &my);
-                        float wx = state.map_cam_pos.x + (mx - SCREEN_WIDTH/2) / state.map_zoom;
-                        float wy = state.map_cam_pos.y + (my - SCREEN_HEIGHT/2) / state.map_zoom;
+                        float scale = state.map_zoom * 10.0f;
+                        float wx = state.map_cam_pos.x + (mx - SCREEN_WIDTH/2) / scale;
+                        float wy = state.map_cam_pos.y + (my - SCREEN_HEIGHT/2) / scale;
                         
-                        // Find nearest star to click position
-                        float min_dist = 1.0f; // Click tolerance in kLY
+                        // Find nearest star - tolerance decreases with zoom
+                        float min_dist = 2.0f / state.map_zoom + 0.1f;
                         int clicked_star_idx = -1;
                         
                         for (int i = 0; i < state.galaxy.star_count; i++) {
@@ -450,8 +451,11 @@ int main(int argc, char* argv[]) {
 
         if (state.mode == VIEW_GALAXY) {
             // Galaxy Map Render - Rotating Milky Way with 3D perspective
-            float view_w_ly = SCREEN_WIDTH / state.map_zoom;
-            float view_h_ly = SCREEN_HEIGHT / state.map_zoom;
+            // Scale factor: 1 unit = 1 kLY, displayed at 10 pixels per kLY base
+            float scale = state.map_zoom * 10.0f; // Increased scale for more spread
+            
+            float view_w_ly = SCREEN_WIDTH / scale;
+            float view_h_ly = SCREEN_HEIGHT / scale;
             
             // Precompute tilt transformation
             float cos_tilt = cosf(state.map_tilt);
@@ -473,16 +477,21 @@ int main(int argc, char* argv[]) {
                 float z_tilted = y_3d * sin_tilt + z_3d * cos_tilt;
                 
                 // Frustum culling (use tilted coordinates)
-                if (fabsf(x_3d - state.map_cam_pos.x) > view_w_ly / 2 + 10) continue;
-                if (fabsf(y_tilted - state.map_cam_pos.y) > view_h_ly / 2 + 10) continue;
+                if (fabsf(x_3d - state.map_cam_pos.x) > view_w_ly / 2 + 5) continue;
+                if (fabsf(y_tilted - state.map_cam_pos.y) > view_h_ly / 2 + 5) continue;
                 
                 // Project to screen
-                int sx = (x_3d - state.map_cam_pos.x) * state.map_zoom + SCREEN_WIDTH/2;
-                int sy = (y_tilted - state.map_cam_pos.y) * state.map_zoom + SCREEN_HEIGHT/2;
+                int sx = (x_3d - state.map_cam_pos.x) * scale + SCREEN_WIDTH/2;
+                int sy = (y_tilted - state.map_cam_pos.y) * scale + SCREEN_HEIGHT/2;
                 
-                // Size based on zoom + depth (closer = bigger)
-                float depth_factor = 1.0f + z_tilted * 0.05f;
-                int radius = MAX(1, (int)(state.map_zoom / 10 * depth_factor));
+                // Star size: small dots at all zoom levels
+                // Max 3-4 pixels when zoomed out, 1-2 pixels when zoomed in
+                float depth_factor = 1.0f + z_tilted * 0.01f;
+                int radius;
+                if (state.map_zoom < 1.0f) radius = 3; // Zoomed out: small but visible
+                else if (state.map_zoom < 10.0f) radius = 2;
+                else radius = 1; // Zoomed in: tiny dots
+                radius = MAX(1, (int)(radius * depth_factor));
                 
                 // Extract color with depth-based brightness
                 Uint32 c = gs->color;
@@ -505,7 +514,7 @@ int main(int argc, char* argv[]) {
             
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             char ui_text[256];
-            sprintf(ui_text, "GALAXY | W/S: Tilt | [ ]: Time x%.1f | SPACE: Pause", state.time_speed);
+            sprintf(ui_text, "GALAXY | W/S: Tilt | [ ]: Time x%.1f | Zoom: %.1fx", state.time_speed, state.map_zoom);
             draw_text(renderer, 10, 10, ui_text, 2);
 
             
