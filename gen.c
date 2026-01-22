@@ -114,6 +114,10 @@ StarSystem generate_system(int x, int y) {
         
         float v = sqrtf(39.478 * total_mass / current_dist);
         p->vel = (Vec3){-sin(angle) * v, cos(angle) * v, 0};
+        
+        p->orbit_radius = current_dist;
+        p->orbit_angle = angle;
+        p->orbit_speed = v / current_dist; // Angular velocity for Keplerian orbit
         p->rotation_angle = rand_float(0, 6.28);
         
         bool is_outer = current_dist > frost_line * 0.8;

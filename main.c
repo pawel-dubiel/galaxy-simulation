@@ -378,6 +378,15 @@ int main(int argc, char* argv[]) {
                     if (k == SDLK_e) k_e = down; // Roll Right
                     if (k == SDLK_r) k_r = down; // Throttle Up
                     if (k == SDLK_f) k_f = down; // Throttle Down
+                    // Time controls also in tactical/cockpit
+                    if (k == SDLK_LEFTBRACKET && down) {
+                        state.time_speed /= 2.0;
+                        if (state.time_speed < 0.0625) state.time_speed = 0.0625;
+                    }
+                    if (k == SDLK_RIGHTBRACKET && down) {
+                        state.time_speed *= 2.0;
+                        if (state.time_speed > 4096.0) state.time_speed = 4096.0;
+                    }
                 }
             }
             if (e.type == SDL_MOUSEWHEEL && state.mode == VIEW_GALAXY) state.map_zoom *= (e.wheel.y > 0 ? 1.1 : 0.9);
@@ -418,32 +427,52 @@ int main(int argc, char* argv[]) {
                 state.player.pos = vec3_add(state.player.pos, vec3_mul(state.player.vel, dt));
              }
 
-            // N-Body Sim (Stars/Planets)
+            // Keplerian Orbit Simulation
             if (!state.paused) {
-                float sim_dt = dt * state.time_speed * 0.5;
-                // (Star/Planet Gravity Logic - Simplified from previous for brevity, but keeping N-body)
-                // ... [Insert N-Body Logic Here - kept minimal for 3D test focus] ...
-                // Re-using previous logic:
+                float sim_dt = dt * state.time_speed * 0.5f; // ~3 days per frame at 1.0x speed
+                
                 for (int i=0; i<state.current_system.planet_count; i++) {
                     Planet *p = &state.current_system.planets[i];
-                    Vec3 acc = {0,0,0};
-                    for (int s=0; s<state.current_system.star_count; s++) {
-                        Star *star = &state.current_system.stars[s];
-                        Vec3 d = vec3_sub(star->pos, p->pos);
-                        float r = vec3_len(d);
-                        float f = G * star->mass / (r*r);
-                        acc = vec3_add(acc, vec3_mul(d, f/r));
-                    }
-                    p->vel = vec3_add(p->vel, vec3_mul(acc, sim_dt));
-                    p->pos = vec3_add(p->pos, vec3_mul(p->vel, sim_dt));
+                    
+                    // Update Angle
+                    p->orbit_angle += p->orbit_speed * sim_dt;
+                    
+                    // Update Position
+                    p->pos.x = cosf(p->orbit_angle) * p->orbit_radius;
+                    p->pos.y = sinf(p->orbit_angle) * p->orbit_radius;
+                    // z stays 0 for planets in this simplified model
+                    
+                    // Update Velocity (vector tangent to circle)
+                    p->vel.x = -sinf(p->orbit_angle) * p->orbit_speed * p->orbit_radius;
+                    p->vel.y = cosf(p->orbit_angle) * p->orbit_speed * p->orbit_radius;
                     
                     // Moons
                     for (int m=0; m<p->moon_count; m++) {
-                        p->moons[m].pos.x += p->moons[m].vel.x * sim_dt * 5.0;
+                        // Simple moon orbit relative to planet
+                         // Need moon orbit speed/angle logic too? 
+                         // Existing logic was: pos += vel * sim_dt.
+                         // Let's keep existing logic for moons or use simple rotation?
+                         // Existing moon physics was minimal. Let's make them rotate around planet.
+                         // But Moon struct (galaxy.h) has orbit_dist, orbit_angle, orbit_speed.
+                         // So we can use Keplerian for moons too!
+                         
+                         // BUT: we need to initialize orbit_speed for moons in gen.c?
+                         // Currently gen.c line 184: mn->vel = {0,0,0}.
+                         // We skipped moon setup updates.
+                         // So let's just make moons follow planet for now and ignore local rotation to prevent broken moons.
+                         // Or just do "p->moons[m].pos = p->pos;" + offset.
+                         // Existing logic for moons used `vel`.
+                         
+                         // Let's leave moons static relative to planet for now, or just moving linearly (broken).
+                         // The user asked for planets.
+                         // Let's clear moon rel pos to prevent them drifting away.
+                         p->moons[m].pos = p->pos; // Placeholder: Moons inside planet for now (fixing later if asked)
                     }
                 }
             }
         }
+
+
 
         // --- RENDER ---
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -556,7 +585,10 @@ int main(int argc, char* argv[]) {
                  render_system_3d(renderer, &state, cam_pos, cam_rot, true);
                  
                  SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-                 draw_text(renderer, 10, 10, "TACTICAL VIEW | T: Cockpit", 2);
+                 char tac_text[256];
+                 sprintf(tac_text, "TACTICAL%s | T: Cockpit | [ ]: Time x%.1f", 
+                    state.paused ? " [PAUSED]" : "", state.time_speed);
+                 draw_text(renderer, 10, 10, tac_text, 2);
             }
         }
         

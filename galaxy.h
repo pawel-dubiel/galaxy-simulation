@@ -55,6 +55,11 @@ typedef struct {
     Vec3 pos; 
     Vec3 vel; 
     
+    // Orbital Parameters (Keplerian fallback)
+    float orbit_radius;
+    float orbit_angle;
+    float orbit_speed;
+    
     // Details
     float density; 
     float surface_temp; 
