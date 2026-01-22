@@ -251,10 +251,10 @@ int main(int argc, char* argv[]) {
     init_cache(&state);
     
     // Initialize Galaxy
-    init_galaxy(&state.galaxy, 20000);
+    init_galaxy(&state.galaxy, 100000);
     
     // Init Texture
-    state.body_texture = create_circle_texture(renderer, 64);
+    state.body_texture = create_circle_texture(renderer, 16);
     if (!state.body_texture) printf("Failed to create texture\n");
     
     for (int i=1; i<argc; i++) {
