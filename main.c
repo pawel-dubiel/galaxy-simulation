@@ -428,12 +428,13 @@ int main(int argc, char* argv[]) {
                     // Update Angle
                     p->orbit_angle += p->orbit_speed * sim_dt;
                     
-                    // Update Position
-                    p->pos.x = cosf(p->orbit_angle) * p->orbit_radius;
-                    p->pos.y = sinf(p->orbit_angle) * p->orbit_radius;
-                    // z stays 0 for planets in this simplified model
+                    // Update Position (with Eccentricity and Inclination)
+                    float r = p->orbit_radius * (1.0f - p->eccentricity * cosf(p->orbit_angle));
+                    p->pos.x = cosf(p->orbit_angle) * r;
+                    p->pos.y = sinf(p->orbit_angle) * r;
+                    p->pos.z = r * sinf(p->orbit_angle) * sinf(p->inclination);
                     
-                    // Update Velocity (vector tangent to circle)
+                    // Update Velocity (approximate tangent)
                     p->vel.x = -sinf(p->orbit_angle) * p->orbit_speed * p->orbit_radius;
                     p->vel.y = cosf(p->orbit_angle) * p->orbit_speed * p->orbit_radius;
                     
