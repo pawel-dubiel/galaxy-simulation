@@ -251,7 +251,7 @@ int main(int argc, char* argv[]) {
     init_cache(&state);
     
     // Initialize Galaxy
-    init_galaxy(&state.galaxy, 80000);
+    init_galaxy(&state.galaxy, 20000);
     
     // Init Texture
     state.body_texture = create_circle_texture(renderer, 64);
@@ -484,14 +484,8 @@ int main(int argc, char* argv[]) {
                 int sx = (x_3d - state.map_cam_pos.x) * scale + SCREEN_WIDTH/2;
                 int sy = (y_tilted - state.map_cam_pos.y) * scale + SCREEN_HEIGHT/2;
                 
-                // Star size: small dots at all zoom levels
-                // Max 3-4 pixels when zoomed out, 1-2 pixels when zoomed in
-                float depth_factor = 1.0f + z_tilted * 0.01f;
-                int radius;
-                if (state.map_zoom < 1.0f) radius = 3; // Zoomed out: small but visible
-                else if (state.map_zoom < 10.0f) radius = 2;
-                else radius = 1; // Zoomed in: tiny dots
-                radius = MAX(1, (int)(radius * depth_factor));
+                // Stars are always single points (1 pixel) for realistic appearance
+                int radius = 1;
                 
                 // Extract color with depth-based brightness
                 Uint32 c = gs->color;

@@ -216,7 +216,7 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
     int disk_count = star_count * 23 / 100;
     int idx = 0;
     
-    // ===== NUCLEAR BULGE (bright yellow-white core) =====
+    // ===== NUCLEAR BULGE (Old Population II, very high density, bright) =====
     for (int i = 0; i < bulge_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
@@ -229,43 +229,42 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_radius = r;
         s->orbit_angle = theta;
-        s->z_offset = rand_float(-0.8, 0.8) * (1.0 - r/BULGE_RADIUS); // Spherical bulge
+        s->z_offset = rand_float(-0.6, 0.6) * (1.0 - r/BULGE_RADIUS); // Spherical bulge, slightly flattened
         
-        // Slow, near-solid-body rotation in bulge
-        float v_orbit = V_FLAT * (r / BULGE_RADIUS) * 0.5;
-        if (r < 0.05) r = 0.05;
-        s->orbit_speed = v_orbit / (r * 3.086e16) * 3.154e7;
+        s->orbit_speed = V_FLAT * (r / BULGE_RADIUS) * 0.5 / (r * 3.086e16) * 3.154e7;
         
-        // Bright warm-white core
-        int brightness = 240 + rand() % 15;
-        s->color = (brightness << 24) | ((brightness - 10) << 16) | ((brightness - 30) << 8) | 0xFF;
+        // BULGE: Old, metal-rich giants. High surface brightness.
+        // Extremely bright core, yellow-white.
+        // Brightness decays slightly with radius.
+        int base_bright = 230 + rand() % 25;
+        float r_factor = 1.0f - (r / BULGE_RADIUS) * 0.3f; // Center is brighter
+        int final_bright = (int)(base_bright * r_factor);
+        if (final_bright > 255) final_bright = 255;
+        
+        // Color: Warm Yellow/White (4000K - 5000K)
+        // R=255, G=200-240, B=100-180
+        s->color = (final_bright << 24) | ((final_bright - 20) << 16) | ((final_bright - 80) << 8) | 0xFF;
         
         s->grid_x = (int)(cosf(theta) * r * 10);
         s->grid_y = (int)(sinf(theta) * r * 10);
         s->seed = get_seed(s->grid_x, s->grid_y);
     }
     
-    // ===== CENTRAL BAR (smooth, tapered, blends into disk) =====
+    // ===== CENTRAL BAR (Old Disk/Bulge mix, elongated) =====
     for (int i = 0; i < bar_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
-        // Bar aligned at ~25 degrees (as seen from Earth direction)
         float bar_angle = 0.45f;
-        
-        // Use exponential distribution along bar length (tapered ends)
         float u = rand_float(0.001, 1.0);
         float bar_x = -BAR_LENGTH * 0.7f * logf(u) * (rand() % 2 == 0 ? 1 : -1);
         if (fabsf(bar_x) > BAR_LENGTH) bar_x = rand_float(-BAR_LENGTH, BAR_LENGTH) * 0.8f;
         
-        // Width decreases toward ends (tapered shape)
         float width_scale = 1.0f - powf(fabsf(bar_x) / BAR_LENGTH, 2.0f) * 0.7f;
         float bar_y = rand_float(-1.0, 1.0) * BAR_WIDTH * width_scale;
         
-        // Add some randomness to break up the hard shape
         bar_x += rand_float(-0.5, 0.5);
         bar_y += rand_float(-0.3, 0.3);
         
-        // Rotate to bar orientation
         float x = bar_x * cosf(bar_angle) - bar_y * sinf(bar_angle);
         float y = bar_x * sinf(bar_angle) + bar_y * cosf(bar_angle);
         
@@ -275,50 +274,42 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_radius = r;
         s->orbit_angle = theta;
-        s->z_offset = rand_float(-0.3, 0.3) * width_scale; // Thinner at edges
+        s->z_offset = rand_float(-0.3, 0.3) * width_scale;
         
-        // Bar rotates with pattern speed (slower than disk)
         float pattern_speed = V_FLAT * 0.4 / (BAR_LENGTH * 3.086e16) * 3.154e7;
         s->orbit_speed = pattern_speed + (V_FLAT / (r * 3.086e16) * 3.154e7 - pattern_speed) * 0.3;
         
-        // Warm yellow-white stars (less saturated than before)
-        int brightness = 190 + rand() % 50;
-        int warmth = 10 + rand() % 15;
-        s->color = (brightness << 24) | ((brightness - warmth/2) << 16) | ((brightness - warmth) << 8) | 0xFF;
+        // BAR: Similar to bulge but transitioning to disk.
+        // Good brightness, warm colors.
+        int brightness = 200 + rand() % 55;
+        // slightly less yellow than bulge
+        s->color = (brightness << 24) | ((brightness - 30) << 16) | ((brightness - 60) << 8) | 0xFF;
         
         s->grid_x = (int)(x * 10);
         s->grid_y = (int)(y * 10);
         s->seed = get_seed(s->grid_x, s->grid_y);
     }
     
-    // ===== SPIRAL ARMS (4 major arms emanating from bar ends) =====
-    // Arms: 0=Norma, 1=Scutum-Centaurus, 2=Perseus, 3=Carina-Sagittarius
+    // ===== SPIRAL ARMS (Young Population I, star formation) =====
     const char* arm_names[] = {"Norma", "Scutum", "Perseus", "Carina"};
-    (void)arm_names; // Suppress unused warning
+    (void)arm_names;
     
     for (int i = 0; i < arm_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
-        // Pick arm (0-3)
         int arm = rand() % 4;
-        
-        // Arms originate from bar ends at ~25 degree angle
-        // Two arms from each end of the bar
         float bar_angle = 0.45f;
         float arm_start;
-        if (arm == 0) arm_start = bar_angle;                    // Norma - bar end 1
-        else if (arm == 1) arm_start = bar_angle + 1.5707963f;  // Scutum - 90 degrees
-        else if (arm == 2) arm_start = bar_angle + 3.14159f;    // Perseus - bar end 2
-        else arm_start = bar_angle + 4.712389f;                 // Carina - 270 degrees
+        if (arm == 0) arm_start = bar_angle;
+        else if (arm == 1) arm_start = bar_angle + 1.5707963f;
+        else if (arm == 2) arm_start = bar_angle + 3.14159f;
+        else arm_start = bar_angle + 4.712389f;
         
-        // Radius: starts from inside the bar for smooth connection
-        float min_r = BAR_LENGTH * 0.5f; // Overlap with bar
+        float min_r = BAR_LENGTH * 0.5f;
         float r = min_r + powf(rand_float(0, 1), 0.5) * (GALAXY_RADIUS - min_r);
         
-        // Logarithmic spiral: theta = ln(r/a) / tan(pitch)
         float spiral_theta = logf(r / min_r) / ARM_TIGHTNESS + arm_start;
         
-        // Arm width: narrow near center, wider at edges
         float arm_width = 0.3f + (r / GALAXY_RADIUS) * 0.5f;
         float arm_scatter = rand_float(-arm_width, arm_width);
         
@@ -326,20 +317,24 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         s->orbit_angle = spiral_theta + arm_scatter;
         s->z_offset = rand_float(-DISK_THICKNESS/2, DISK_THICKNESS/2);
         
-        // Flat rotation curve
         s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7;
         
-        // Arm stars: mostly blue-white (young stars, star formation)
-        int brightness = 210 + rand() % 45;
-        if (rand() % 8 == 0) {
-            // Bright blue (O/B stars in HII regions)
-            s->color = ((brightness - 50) << 24) | ((brightness - 20) << 16) | (brightness << 8) | 0xFF;
+        // ARMS: Young, hot stars (O/B associations).
+        // Some VERY bright blue/white stars, others average.
+        // We want accurate "clumping" of brightness if possible, but random is okay for now.
+        
+        if (rand() % 20 == 0) {
+            // Supergiant / O-Star Cluster (Very Bright, Blue)
+            int b = 240 + rand() % 15;
+            s->color = ((b - 30) << 24) | ((b - 10) << 16) | (b << 8) | 0xFF;
         } else if (rand() % 5 == 0) {
-            // Pure white (A stars)
-            s->color = (brightness << 24) | (brightness << 16) | (brightness << 8) | 0xFF;
+           // Bright Main Sequence (A/F stars, White)
+            int b = 220 + rand() % 35;
+            s->color = (b << 24) | (b << 16) | (b << 8) | 0xFF; // Pure white
         } else {
-            // Pale blue-white (typical arm population)
-            s->color = ((brightness - 15) << 24) | ((brightness - 5) << 16) | (brightness << 8) | 0xFF;
+            // Background arm population (B-F stars, Blue-White)
+            int b = 180 + rand() % 50;
+            s->color = ((b - 40) << 24) | ((b - 10) << 16) | (b << 8) | 0xFF;
         }
         
         s->grid_x = (int)(cosf(s->orbit_angle) * r * 10);
@@ -347,13 +342,13 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         s->seed = get_seed(s->grid_x, s->grid_y);
     }
     
-    // ===== THIN DISK (between arms, older stars) =====
+    // ===== THIN DISK (Background Population I/II) =====
     for (int i = 0; i < disk_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
-        // Exponential disk profile
+        // Exponential disk
         float u = rand_float(0.01, 1.0);
-        float r = -15.0f * logf(u); // Scale length ~15 kLY
+        float r = -15.0f * logf(u);
         if (r > GALAXY_RADIUS) r = rand_float(BAR_LENGTH, GALAXY_RADIUS);
         if (r < BAR_LENGTH) r = rand_float(BAR_LENGTH, GALAXY_RADIUS * 0.8);
         
@@ -363,39 +358,41 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         s->orbit_angle = theta;
         s->z_offset = rand_float(-DISK_THICKNESS/2, DISK_THICKNESS/2);
         
-        // Flat rotation
         s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7;
         
-        // Disk: dimmer, mixed population (more yellow)
-        int brightness = 140 + rand() % 80;
-        int warmth = rand() % 25;
-        s->color = (brightness << 24) | ((brightness - warmth/2) << 16) | ((brightness - warmth) << 8) | 0xFF;
+        // DISK: Dimmer background stars.
+        // Apply radial brightness gradient (brighter near center)
+        float radial_boost = 1.0f + (1.0f - (r / GALAXY_RADIUS)) * 0.5f;
+        
+        int base = 100 + rand() % 100;
+        int brightness = (int)(base * radial_boost);
+        if (brightness > 255) brightness = 255;
+        
+        // Slightly yellow/orange (Sun-like)
+        s->color = (brightness << 24) | ((brightness - 20) << 16) | ((brightness - 40) << 8) | 0xFF;
         
         s->grid_x = (int)(cosf(theta) * r * 10);
         s->grid_y = (int)(sinf(theta) * r * 10);
         s->seed = get_seed(s->grid_x, s->grid_y);
     }
     
-    // ===== GLOBULAR CLUSTERS / HALO (scattered spherically) =====
+    // ===== STELLAR HALO (Old Population II, poor metals) =====
     for (; idx < star_count; idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
-        // Spherical halo distribution
         float r = rand_float(5.0, GALAXY_RADIUS * 1.5);
         float theta = rand_float(0, 6.28318530718);
         
         s->orbit_radius = r;
         s->orbit_angle = theta;
-        // Large z-offset for spherical halo
         s->z_offset = rand_float(-20.0, 20.0) * powf(rand_float(0, 1), 0.5);
         
-        // Halo doesn't follow disk rotation (random orbits)
         s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7 * rand_float(0.3, 1.5);
         
-        // Old, dim red/yellow stars
-        int brightness = 120 + rand() % 60;
-        int warmth = 30 + rand() % 30;
-        s->color = (brightness << 24) | ((brightness - warmth/2) << 16) | ((brightness - warmth) << 8) | 0xFF;
+        // HALO: Dim, Reddish/Orange.
+        int brightness = 80 + rand() % 40; // Quite dim
+        
+        s->color = (brightness << 24) | ((brightness - 20) << 16) | ((brightness - 40) << 8) | 0xFF;
         
         s->grid_x = (int)(cosf(theta) * r * 10);
         s->grid_y = (int)(sinf(theta) * r * 10);
