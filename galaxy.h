@@ -82,6 +82,24 @@ typedef struct {
     Planet planets[16];
 } StarSystem;
 
+// Galaxy-scale structures for rotating Milky Way
+typedef struct {
+    unsigned int seed;        // Seed for system generation
+    float orbit_radius;       // Distance from galactic center (kLY)
+    float orbit_angle;        // Current angle in orbit (radians)
+    float orbit_speed;        // Angular velocity (rad/year)
+    float z_offset;           // Vertical offset from galactic plane (kLY)
+    Uint32 color;            // Star color for rendering
+    int grid_x, grid_y;      // Original grid coordinates for system generation
+} GalaxyStar;
+
+typedef struct {
+    GalaxyStar *stars;       // Dynamic array of galaxy stars
+    int star_count;          // Total number of stars
+    float time;              // Galaxy simulation time (years)
+} Galaxy;
+
+
 // Ship (6-DOF)
 typedef struct {
     Vec3 pos;
@@ -104,6 +122,9 @@ typedef struct {
     // Galaxy View Camera
     Vec3 map_cam_pos;
     float map_zoom;
+    
+    // Galaxy Simulation
+    Galaxy galaxy;
     
     // System View / Player
     Ship player;
@@ -133,5 +154,7 @@ bool star_exists(int x, int y);
 StarSystem generate_system(int x, int y);
 float rand_float(float min, float max); 
 void set_forced_star_count(int count);
+void init_galaxy(Galaxy *galaxy, int star_count);
+
 
 #endif

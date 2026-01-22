@@ -249,6 +249,9 @@ int main(int argc, char* argv[]) {
     
     init_cache(&state);
     
+    // Initialize Galaxy
+    init_galaxy(&state.galaxy, 80000);
+    
     // Init Texture
     state.body_texture = create_circle_texture(renderer, 64);
     if (!state.body_texture) printf("Failed to create texture\n");
@@ -277,21 +280,42 @@ int main(int argc, char* argv[]) {
                         int mx, my; SDL_GetMouseState(&mx, &my);
                         float wx = state.map_cam_pos.x + (mx - SCREEN_WIDTH/2) / state.map_zoom;
                         float wy = state.map_cam_pos.y + (my - SCREEN_HEIGHT/2) / state.map_zoom;
-                        int ix = round(wx); int iy = round(wy);
-                        if (star_exists(ix, iy)) {
-                            int idx = find_cached_system(&state, ix, iy);
+                        
+                        // Find nearest star to click position
+                        float min_dist = 1.0f; // Click tolerance in kLY
+                        int clicked_star_idx = -1;
+                        
+                        for (int i = 0; i < state.galaxy.star_count; i++) {
+                            GalaxyStar *gs = &state.galaxy.stars[i];
+                            
+                            // Calculate current position
+                            float current_angle = gs->orbit_angle + gs->orbit_speed * state.galaxy.time;
+                            float x_ly = cosf(current_angle) * gs->orbit_radius;
+                            float y_ly = sinf(current_angle) * gs->orbit_radius;
+                            
+                            float dx = x_ly - wx;
+                            float dy = y_ly - wy;
+                            float dist = sqrtf(dx*dx + dy*dy);
+                            
+                            if (dist < min_dist) {
+                                min_dist = dist;
+                                clicked_star_idx = i;
+                            }
+                        }
+                        
+                        if (clicked_star_idx >= 0) {
+                            GalaxyStar *gs = &state.galaxy.stars[clicked_star_idx];
+                            
+                            // Check cache using grid coordinates
+                            int idx = find_cached_system(&state, gs->grid_x, gs->grid_y);
                             if (idx != -1) state.current_system = state.visited_systems[idx];
-                            else state.current_system = generate_system(ix, iy);
+                            else state.current_system = generate_system(gs->grid_x, gs->grid_y);
+                            
                             state.mode = VIEW_TACTICAL; 
                             
                             // Reset Player to outer rim of system
                             state.player.pos = (Vec3){state.current_system.planet_count * 2.0f, 0, 2.0f};
                             state.player.vel = (Vec3){0,0,0};
-                            // Look at star (0,0,0)
-                            Vec3 dir = vec3_norm(vec3_sub((Vec3){0,0,0}, state.player.pos));
-                            // Simple look-at setup (approx)
-                            state.player.rot = (Mat3){{{0,1,0},{0,0,1},{dir.x, dir.y, dir.z}}}; // Hacky init
-                            // Actually better to just keep identity or look inward
                             state.player.rot = (Mat3){{{1,0,0},{0,1,0},{0,0,1}}};
                         }
                     }
@@ -325,6 +349,14 @@ int main(int argc, char* argv[]) {
                     if (k == SDLK_DOWN) state.map_cam_pos.y += 10.0/state.map_zoom*20;
                     if (k == SDLK_EQUALS || k == SDLK_PLUS) state.map_zoom *= 1.1;
                     if (k == SDLK_MINUS) state.map_zoom /= 1.1;
+                    if (k == SDLK_LEFTBRACKET && down) {
+                        state.time_speed /= 2.0;
+                        if (state.time_speed < 0.0625) state.time_speed = 0.0625; // Min: 1/16x
+                    }
+                    if (k == SDLK_RIGHTBRACKET && down) {
+                        state.time_speed *= 2.0;
+                        if (state.time_speed > 4096.0) state.time_speed = 4096.0; // Max: 4096x
+                    }
                 } else {
                     // Ship Controls
                     if (k == SDLK_w) k_w = down; // Pitch Down
@@ -340,7 +372,14 @@ int main(int argc, char* argv[]) {
             if (e.type == SDL_MOUSEWHEEL && state.mode == VIEW_GALAXY) state.map_zoom *= (e.wheel.y > 0 ? 1.1 : 0.9);
         }
 
+
         // --- PHYSICS ---
+        // Update Galaxy Rotation (always, even in system view)
+        if (!state.paused) {
+            state.galaxy.time += dt * state.time_speed * 10000.0f; // Speed up galaxy rotation for visibility
+            // Note: Individual star positions updated during rendering
+        }
+        
         if (state.mode == VIEW_COCKPIT || state.mode == VIEW_TACTICAL) {
              
              if (state.mode == VIEW_COCKPIT) {
@@ -400,29 +439,50 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
 
         if (state.mode == VIEW_GALAXY) {
-            // Galaxy Map Render (Same as before)
-            int view_w = SCREEN_WIDTH / state.map_zoom;
-            int view_h = SCREEN_HEIGHT / state.map_zoom;
-            for (int x = (int)state.map_cam_pos.x - view_w/2; x <= (int)state.map_cam_pos.x + view_w/2; x++) {
-                for (int y = (int)state.map_cam_pos.y - view_h/2; y <= (int)state.map_cam_pos.y + view_h/2; y++) {
-                    if (star_exists(x, y)) {
-                        int sx = (x - state.map_cam_pos.x) * state.map_zoom + SCREEN_WIDTH/2;
-                        int sy = (y - state.map_cam_pos.y) * state.map_zoom + SCREEN_HEIGHT/2;
-                        unsigned int s = get_seed(x,y); srand(s);
-                        int r=255,g=255,b=255; 
-                        if (rand()%2==0) {r=200; g=200;}
-                        
-                        int radius = MAX(2, state.map_zoom/5);
-                        SDL_Rect dst = {sx - radius, sy - radius, radius * 2, radius * 2};
-                        
-                        SDL_SetTextureColorMod(state.body_texture, r, g, b);
-                        SDL_SetTextureAlphaMod(state.body_texture, 255);
-                        SDL_RenderCopy(renderer, state.body_texture, NULL, &dst);
-                    }
-                }
+            // Galaxy Map Render - Rotating Milky Way
+            // Calculate view bounds for frustum culling
+            float view_w_ly = SCREEN_WIDTH / state.map_zoom;
+            float view_h_ly = SCREEN_HEIGHT / state.map_zoom;
+            
+            // Render all visible stars
+            for (int i = 0; i < state.galaxy.star_count; i++) {
+                GalaxyStar *gs = &state.galaxy.stars[i];
+                
+                // Calculate current position based on orbit
+                float current_angle = gs->orbit_angle + gs->orbit_speed * state.galaxy.time;
+                float x_ly = cosf(current_angle) * gs->orbit_radius;
+                float y_ly = sinf(current_angle) * gs->orbit_radius;
+                
+                // Frustum culling
+                if (fabsf(x_ly - state.map_cam_pos.x) > view_w_ly / 2 + 5) continue;
+                if (fabsf(y_ly - state.map_cam_pos.y) > view_h_ly / 2 + 5) continue;
+                
+                // Project to screen
+                int sx = (x_ly - state.map_cam_pos.x) * state.map_zoom + SCREEN_WIDTH/2;
+                int sy = (y_ly - state.map_cam_pos.y) * state.map_zoom + SCREEN_HEIGHT/2;
+                
+                // Calculate size based on zoom
+                int radius = MAX(1, (int)(state.map_zoom / 8));
+                
+                // Extract color
+                Uint32 c = gs->color;
+                int r = (c >> 24) & 0xFF;
+                int g = (c >> 16) & 0xFF;
+                int b = (c >> 8) & 0xFF;
+                
+                // Render star
+                SDL_Rect dst = {sx - radius, sy - radius, radius * 2, radius * 2};
+                SDL_SetTextureColorMod(state.body_texture, r, g, b);
+                SDL_SetTextureAlphaMod(state.body_texture, 255);
+                SDL_RenderCopy(renderer, state.body_texture, NULL, &dst);
             }
+            
+            
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            draw_text(renderer, 10, 10, "GALAXY MAP - Click Star | TAB: Return to Cockpit", 2);
+            char ui_text[256];
+            sprintf(ui_text, "GALAXY MAP | Click Star | SPACE: Pause | [ ]: Time x%.1f", state.time_speed);
+            draw_text(renderer, 10, 10, ui_text, 2);
+
             
         } else {
             
@@ -477,7 +537,10 @@ int main(int argc, char* argv[]) {
 
 
 
+
+
     if (state.body_texture) SDL_DestroyTexture(state.body_texture);
+    if (state.galaxy.stars) free(state.galaxy.stars);
     free(state.visited_systems);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

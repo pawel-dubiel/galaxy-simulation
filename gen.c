@@ -187,3 +187,114 @@ StarSystem generate_system(int x, int y) {
 
     return sys;
 }
+
+// Initialize a rotating Milky Way galaxy
+void init_galaxy(Galaxy *galaxy, int star_count) {
+    galaxy->star_count = star_count;
+    galaxy->stars = (GalaxyStar*)malloc(sizeof(GalaxyStar) * star_count);
+    galaxy->time = 0.0f;
+    
+    // Galaxy parameters (Milky Way-like)
+    const float GALAXY_RADIUS = 50.0f;      // kLY (kilolight-years)
+    const float BULGE_RADIUS = 3.0f;        // kLY
+    const int NUM_ARMS = 4;                 // Spiral arms
+    const float ARM_TIGHTNESS = 0.3f;       // How tightly wound the spirals are
+    const float V_FLAT = 220.0f;            // km/s (flat rotation curve velocity)
+    
+    // Seed for consistent generation
+    srand(42);
+    
+    int stars_per_region = star_count / 3;
+    int idx = 0;
+    
+    // Region 1: Central Bulge (dense, older red/yellow stars)
+    for (int i = 0; i < stars_per_region && idx < star_count; i++, idx++) {
+        GalaxyStar *s = &galaxy->stars[idx];
+        
+        // Random position in bulge (spherical distribution)
+        float r = rand_float(0.1, BULGE_RADIUS) * powf(rand_float(0, 1), 0.5); // Bias toward center
+        float theta = rand_float(0, 6.28318530718);
+        
+        s->orbit_radius = r;
+        s->orbit_angle = theta;
+        s->z_offset = rand_float(-0.5, 0.5); // Thick bulge
+        
+        // Differential rotation (slower in center due to less enclosed mass)
+        // Using simplified flat curve: v = V_FLAT, omega = v/r
+        // But in bulge, use Keplerian-ish: v ~ sqrt(r)
+        float v_orbit = V_FLAT * sqrtf(r / BULGE_RADIUS); // km/s
+        s->orbit_speed = v_orbit / (r * 3.086e16) * 3.154e7; // Convert to rad/year
+        
+        // Older stars (red/yellow)
+        int color_choice = rand() % 3;
+        if (color_choice == 0) s->color = 0xFF4400FF; // Red
+        else if (color_choice == 1) s->color = 0xFFAA00FF; // Orange
+        else s->color = 0xFFFF00FF; // Yellow
+        
+        // Generate grid coordinates for system generation
+        s->grid_x = (int)(cosf(theta) * r * 10);
+        s->grid_y = (int)(sinf(theta) * r * 10);
+        s->seed = get_seed(s->grid_x, s->grid_y);
+    }
+    
+    // Region 2: Spiral Arms (logarithmic spiral)
+    for (int i = 0; i < stars_per_region && idx < star_count; i++, idx++) {
+        GalaxyStar *s = &galaxy->stars[idx];
+        
+        // Pick a random arm
+        int arm = rand() % NUM_ARMS;
+        float arm_offset = arm * (6.28318530718 / NUM_ARMS);
+        
+        // Logarithmic spiral: r = a * e^(b*theta)
+        // Rearranged: theta = ln(r/a) / b
+        float r = rand_float(BULGE_RADIUS, GALAXY_RADIUS);
+        float spiral_theta = logf(r / 3.0f) / ARM_TIGHTNESS + arm_offset;
+        
+        // Add some scatter perpendicular to arm
+        float scatter = rand_float(-0.5, 0.5);
+        
+        s->orbit_radius = r;
+        s->orbit_angle = spiral_theta + scatter;
+        s->z_offset = rand_float(-0.2, 0.2); // Thin disk
+        
+        // Flat rotation curve: v = constant
+        s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7; // rad/year
+        
+        // Young blue/white stars in arms
+        int color_choice = rand() % 3;
+        if (color_choice == 0) s->color = 0x8888FFFF; // Blue
+        else if (color_choice == 1) s->color = 0xAABBFFFF; // Light blue
+        else s->color = 0xFFFFFFFF; // White
+        
+        s->grid_x = (int)(cosf(s->orbit_angle) * r * 10);
+        s->grid_y = (int)(sinf(s->orbit_angle) * r * 10);
+        s->seed = get_seed(s->grid_x, s->grid_y);
+    }
+    
+    // Region 3: Disk (between arms, mixed population)
+    for (int i = 0; idx < star_count; i++, idx++) {
+        GalaxyStar *s = &galaxy->stars[idx];
+        
+        float r = rand_float(BULGE_RADIUS, GALAXY_RADIUS);
+        float theta = rand_float(0, 6.28318530718);
+        
+        s->orbit_radius = r;
+        s->orbit_angle = theta;
+        s->z_offset = rand_float(-0.3, 0.3);
+        
+        // Flat rotation curve
+        s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7; // rad/year
+        
+        // Mixed colors
+        int color_choice = rand() % 5;
+        if (color_choice == 0) s->color = 0xFF4400FF;
+        else if (color_choice == 1) s->color = 0xFFFF00FF;
+        else if (color_choice == 2) s->color = 0xFFFFFFFF;
+        else if (color_choice == 3) s->color = 0xAABBFFFF;
+        else s->color = 0xFFAA00FF;
+        
+        s->grid_x = (int)(cosf(theta) * r * 10);
+        s->grid_y = (int)(sinf(theta) * r * 10);
+        s->seed = get_seed(s->grid_x, s->grid_y);
+    }
+}
