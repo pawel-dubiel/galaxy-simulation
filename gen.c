@@ -245,16 +245,25 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         s->seed = get_seed(s->grid_x, s->grid_y);
     }
     
-    // ===== CENTRAL BAR (elongated, rotates as solid body) =====
+    // ===== CENTRAL BAR (smooth, tapered, blends into disk) =====
     for (int i = 0; i < bar_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
         
-        // Bar aligned at ~45 degrees (as seen from Earth direction)
-        float bar_angle = 0.45f; // Bar orientation
+        // Bar aligned at ~25 degrees (as seen from Earth direction)
+        float bar_angle = 0.45f;
         
-        // Elliptical distribution along bar
-        float bar_x = rand_float(-BAR_LENGTH, BAR_LENGTH);
-        float bar_y = rand_float(-BAR_WIDTH, BAR_WIDTH) * (1.0 - fabsf(bar_x)/BAR_LENGTH * 0.5);
+        // Use exponential distribution along bar length (tapered ends)
+        float u = rand_float(0.001, 1.0);
+        float bar_x = -BAR_LENGTH * 0.7f * logf(u) * (rand() % 2 == 0 ? 1 : -1);
+        if (fabsf(bar_x) > BAR_LENGTH) bar_x = rand_float(-BAR_LENGTH, BAR_LENGTH) * 0.8f;
+        
+        // Width decreases toward ends (tapered shape)
+        float width_scale = 1.0f - powf(fabsf(bar_x) / BAR_LENGTH, 2.0f) * 0.7f;
+        float bar_y = rand_float(-1.0, 1.0) * BAR_WIDTH * width_scale;
+        
+        // Add some randomness to break up the hard shape
+        bar_x += rand_float(-0.5, 0.5);
+        bar_y += rand_float(-0.3, 0.3);
         
         // Rotate to bar orientation
         float x = bar_x * cosf(bar_angle) - bar_y * sinf(bar_angle);
@@ -262,17 +271,19 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         float r = sqrtf(x*x + y*y);
         float theta = atan2f(y, x);
+        if (r < 0.1) r = 0.1;
         
         s->orbit_radius = r;
         s->orbit_angle = theta;
-        s->z_offset = rand_float(-0.4, 0.4);
+        s->z_offset = rand_float(-0.3, 0.3) * width_scale; // Thinner at edges
         
-        // Bar rotates as mostly solid body
-        s->orbit_speed = V_FLAT * 0.8 / (BAR_LENGTH * 3.086e16) * 3.154e7;
+        // Bar rotates with pattern speed (slower than disk)
+        float pattern_speed = V_FLAT * 0.4 / (BAR_LENGTH * 3.086e16) * 3.154e7;
+        s->orbit_speed = pattern_speed + (V_FLAT / (r * 3.086e16) * 3.154e7 - pattern_speed) * 0.3;
         
-        // Warm yellow-orange stars in bar (older population)
-        int brightness = 200 + rand() % 40;
-        int warmth = 20 + rand() % 20;
+        // Warm yellow-white stars (less saturated than before)
+        int brightness = 190 + rand() % 50;
+        int warmth = 10 + rand() % 15;
         s->color = (brightness << 24) | ((brightness - warmth/2) << 16) | ((brightness - warmth) << 8) | 0xFF;
         
         s->grid_x = (int)(x * 10);
@@ -291,21 +302,25 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         // Pick arm (0-3)
         int arm = rand() % 4;
         
-        // Arms start from bar ends, offset by 90 degrees each
-        float arm_start = arm * 1.5707963f; // PI/2 radians apart
+        // Arms originate from bar ends at ~25 degree angle
+        // Two arms from each end of the bar
+        float bar_angle = 0.45f;
+        float arm_start;
+        if (arm == 0) arm_start = bar_angle;                    // Norma - bar end 1
+        else if (arm == 1) arm_start = bar_angle + 1.5707963f;  // Scutum - 90 degrees
+        else if (arm == 2) arm_start = bar_angle + 3.14159f;    // Perseus - bar end 2
+        else arm_start = bar_angle + 4.712389f;                 // Carina - 270 degrees
         
-        // Add bar end offset (arms connect to bar)
-        if (arm == 0 || arm == 2) arm_start += 0.45f;  // One end of bar
-        else arm_start += 0.45f + 3.14159f;           // Other end
-        
-        // Radius: weighted toward outer regions for visible arms
-        float r = BAR_LENGTH + powf(rand_float(0, 1), 0.6) * (GALAXY_RADIUS - BAR_LENGTH);
+        // Radius: starts from inside the bar for smooth connection
+        float min_r = BAR_LENGTH * 0.5f; // Overlap with bar
+        float r = min_r + powf(rand_float(0, 1), 0.5) * (GALAXY_RADIUS - min_r);
         
         // Logarithmic spiral: theta = ln(r/a) / tan(pitch)
-        float spiral_theta = logf(r / BAR_LENGTH) / ARM_TIGHTNESS + arm_start;
+        float spiral_theta = logf(r / min_r) / ARM_TIGHTNESS + arm_start;
         
-        // Arm width varies with radius (wider at outer edges)
-        float arm_scatter = rand_float(-0.4, 0.4) * (0.5 + r / GALAXY_RADIUS);
+        // Arm width: narrow near center, wider at edges
+        float arm_width = 0.3f + (r / GALAXY_RADIUS) * 0.5f;
+        float arm_scatter = rand_float(-arm_width, arm_width);
         
         s->orbit_radius = r;
         s->orbit_angle = spiral_theta + arm_scatter;
