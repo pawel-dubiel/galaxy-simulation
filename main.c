@@ -33,14 +33,14 @@ void init_cache(GameState *state) {
     state->visited_capacity = 16;
     state->visited_systems = (StarSystem*)malloc(sizeof(StarSystem) * state->visited_capacity);
 }
-int find_cached_system(GameState *state, int x, int y) {
+int find_cached_system(GameState *state, int star_id) {
     for (int i = 0; i < state->visited_count; i++) {
-        if (state->visited_systems[i].x == x && state->visited_systems[i].y == y) return i;
+        if (state->visited_systems[i].star_id == star_id) return i;
     }
     return -1;
 }
 void cache_current_system(GameState *state) {
-    int idx = find_cached_system(state, state->current_system.x, state->current_system.y);
+    int idx = find_cached_system(state, state->current_system.star_id);
     if (idx != -1) state->visited_systems[idx] = state->current_system;
     else {
         if (state->visited_count >= state->visited_capacity) {
