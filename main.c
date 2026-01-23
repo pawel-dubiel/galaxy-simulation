@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define G 39.478 
@@ -496,14 +497,28 @@ int main(int argc, char* argv[]) {
             float cos_tilt = cosf(state.map_tilt);
             float sin_tilt = sinf(state.map_tilt);
             
+            // Clear spatial grid for click detection
+            memset(&state.click_grid, 0, sizeof(SpatialGrid));
+            state.click_grid.cell_size = (float)SCREEN_WIDTH / SPATIAL_GRID_SIZE;
+            
+            // Precompute view bounds for early frustum culling
+            float cam_view_radius = sqrtf(view_w_ly * view_w_ly + view_h_ly * view_h_ly) / 2.0f + 10.0f;
+            float cam_dist = sqrtf(state.map_cam_pos.x * state.map_cam_pos.x + 
+                                   state.map_cam_pos.y * state.map_cam_pos.y);
+            
             // Render all visible stars
             for (int i = 0; i < state.galaxy.star_count; i++) {
                 GalaxyStar *gs = &state.galaxy.stars[i];
                 
-                // Calculate current 3D position based on orbit
+                // OPTIMIZATION 1: Early frustum culling by orbit radius
+                // If the star's orbit is entirely outside the view, skip it
+                float min_possible_dist = fabsf(gs->orbit_radius - cam_dist) - gs->orbit_radius * 0.1f;
+                if (min_possible_dist > cam_view_radius) continue;
+                
+                // OPTIMIZATION 2: Use fast trig lookup tables
                 float current_angle = gs->orbit_angle + gs->orbit_speed * state.galaxy.time;
-                float x_3d = cosf(current_angle) * gs->orbit_radius;
-                float y_3d = sinf(current_angle) * gs->orbit_radius;
+                float x_3d = fast_cos(current_angle) * gs->orbit_radius;
+                float y_3d = fast_sin(current_angle) * gs->orbit_radius;
                 float z_3d = gs->z_offset;
                 
                 // Apply camera tilt (rotate around X axis)
@@ -518,6 +533,18 @@ int main(int argc, char* argv[]) {
                 // Project to screen
                 int sx = (x_3d - state.map_cam_pos.x) * scale + SCREEN_WIDTH/2;
                 int sy = (y_tilted - state.map_cam_pos.y) * scale + SCREEN_HEIGHT/2;
+                
+                // OPTIMIZATION 3: Populate spatial grid for click detection
+                if (sx >= 0 && sx < SCREEN_WIDTH && sy >= 0 && sy < SCREEN_HEIGHT) {
+                    int gx = sx / (int)state.click_grid.cell_size;
+                    int gy = sy / (int)state.click_grid.cell_size;
+                    if (gx >= 0 && gx < SPATIAL_GRID_SIZE && gy >= 0 && gy < SPATIAL_GRID_SIZE) {
+                        SpatialCell *cell = &state.click_grid.cells[gx][gy];
+                        if (cell->count < SPATIAL_CELL_CAPACITY) {
+                            cell->star_indices[cell->count++] = i;
+                        }
+                    }
+                }
                 
                 // Stars are always single points (1 pixel) for realistic appearance
                 int radius = 1;
