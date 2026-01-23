@@ -282,9 +282,8 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         // R=255, G=200-240, B=100-180
         s->color = (final_bright << 24) | ((final_bright - 20) << 16) | ((final_bright - 80) << 8) | 0xFF;
         
-        s->grid_x = (int)(x * 10);
-        s->grid_y = (int)(y * 10);
-        s->seed = get_seed(s->grid_x, s->grid_y);
+        s->star_id = idx;
+        s->seed = get_seed_from_id(s->star_id);
     }
     
     // ===== CENTRAL BAR (Old Disk/Bulge mix, elongated) =====
@@ -326,9 +325,8 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         // slightly less yellow than bulge
         s->color = (brightness << 24) | ((brightness - 30) << 16) | ((brightness - 60) << 8) | 0xFF;
         
-        s->grid_x = (int)(x * 10);
-        s->grid_y = (int)(y * 10);
-        s->seed = get_seed(s->grid_x, s->grid_y);
+        s->star_id = idx;
+        s->seed = get_seed_from_id(s->star_id);
     }
     
     // ===== SPIRAL ARMS (Young Population I, star formation) =====
@@ -378,9 +376,8 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
             s->color = ((b - 40) << 24) | ((b - 10) << 16) | (b << 8) | 0xFF;
         }
         
-        s->grid_x = (int)(cosf(s->orbit_angle) * r * 10);
-        s->grid_y = (int)(sinf(s->orbit_angle) * r * 10);
-        s->seed = get_seed(s->grid_x, s->grid_y);
+        s->star_id = idx;
+        s->seed = get_seed_from_id(s->star_id);
     }
     
     // ===== THIN DISK (Background Population I) =====
@@ -412,9 +409,8 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         // Slightly yellow/orange (Sun-like)
         s->color = (brightness << 24) | ((brightness - 20) << 16) | ((brightness - 40) << 8) | 0xFF;
         
-        s->grid_x = (int)(cosf(theta) * r * 10);
-        s->grid_y = (int)(sinf(theta) * r * 10);
-        s->seed = get_seed(s->grid_x, s->grid_y);
+        s->star_id = idx;
+        s->seed = get_seed_from_id(s->star_id);
     }
     
     // ===== THICK DISK (Old Population II, Thicker, Dimmer) =====
@@ -447,9 +443,8 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         // Stronger Orange/Red tint for old population
         s->color = (brightness << 24) | ((brightness - 30) << 16) | ((brightness - 60) << 8) | 0xFF;
         
-        s->grid_x = (int)(cosf(theta) * r * 10);
-        s->grid_y = (int)(sinf(theta) * r * 10);
-        s->seed = get_seed(s->grid_x, s->grid_y);
+        s->star_id = idx;
+        s->seed = get_seed_from_id(s->star_id);
     }
     
     // ===== HALO (Inner vs Outer) =====
@@ -489,8 +484,7 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         // Reddish
         s->color = (brightness << 24) | ((brightness - 10) << 16) | ((brightness - 40) << 8) | 0xFF;
         
-        s->grid_x = (int)(cosf(theta) * r * 10);
-        s->grid_y = (int)(sinf(theta) * r * 10);
-        s->seed = get_seed(s->grid_x, s->grid_y);
+        s->star_id = idx;
+        s->seed = get_seed_from_id(s->star_id);
     }
 }
