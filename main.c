@@ -319,10 +319,10 @@ int main(int argc, char* argv[]) {
                         if (clicked_star_idx >= 0) {
                             GalaxyStar *gs = &state.galaxy.stars[clicked_star_idx];
                             
-                            // Check cache using grid coordinates
-                            int idx = find_cached_system(&state, gs->grid_x, gs->grid_y);
+                            // Check cache using star_id (which is the array index)
+                            int idx = find_cached_system(&state, gs->star_id);
                             if (idx != -1) state.current_system = state.visited_systems[idx];
-                            else state.current_system = generate_system(gs->grid_x, gs->grid_y);
+                            else state.current_system = generate_system(gs->star_id);
                             
                             state.mode = VIEW_TACTICAL; 
                             
