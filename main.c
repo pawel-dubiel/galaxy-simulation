@@ -567,7 +567,7 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 
-                // Stars are always single points (1 pixel) for realistic appearance
+                // Stars rendered as small spheres for visibility
                 int radius = 1;
                 
                 // Extract color with depth-based brightness
