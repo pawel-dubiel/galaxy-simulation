@@ -14,6 +14,18 @@ float rand_float(float min, float max) {
     return min + (float)rand() / (float)(RAND_MAX / (max - min));
 }
 
+// IMF-based brightness generation (power-law favoring dim stars)
+// Based on Initial Mass Function: ~76% M-dwarfs (dim), ~12% K-dwarfs, ~7% G-dwarfs (Sun), ~5% brighter
+// power controls steepness: higher = more dim stars (2.0 is realistic IMF-like)
+static int generate_imf_brightness(int min_bright, int max_bright, float power) {
+    float u = rand_float(0.001f, 1.0f);
+    float factor = powf(u, power);  // Power-law: most stars get low factor
+    int brightness = min_bright + (int)((max_bright - min_bright) * factor);
+    if (brightness > 255) brightness = 255;
+    if (brightness < 0) brightness = 0;
+    return brightness;
+}
+
 static int g_forced_star_count = 0;
 void set_forced_star_count(int count) {
     g_forced_star_count = count;
