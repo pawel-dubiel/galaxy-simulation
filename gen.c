@@ -236,24 +236,39 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
     
     // Spiral arm parameters (4 main arms)
     // Arms start from ends of the bar
-    const float ARM_TIGHTNESS = 0.22f;      // Pitch angle ~12 degrees
+    // Individual pitch angles based on scientific measurements (converted to tightness = tan(pitch))
+    // Scutum-Centaurus: ~19° (tightest), Sagittarius: ~13.5°, Perseus: ~9° (loosest), Norma: ~15°
+    const float ARM_PITCH_ANGLES[4] = {
+        0.344f,   // Scutum-Centaurus: tan(19°) ≈ 0.344
+        0.240f,   // Sagittarius: tan(13.5°) ≈ 0.240  
+        0.158f,   // Perseus: tan(9°) ≈ 0.158
+        0.268f    // Norma: tan(15°) ≈ 0.268
+    };
     
     srand(42);
     
-    // Distribution:
-    // 15% Bulge (Dense, Rugby Ball)
-    // 10% Bar (Elongated)
-    // 40% Spiral Arms (Thin, Young)
-    // 15% Thin Disk (Background)
-    // 10% Thick Disk (Older, thicker)
-    // 10% Halo (Split 7% Inner, 3% Outer)
+    // Distribution (Based on Milky Way stellar mass studies):
+    // Scientific breakdown:
+    //   - Disk (thin+thick): ~74% of stellar mass
+    //   - Bulge: ~26% of stellar mass  
+    //   - Halo: ~1-4% (very minor)
+    //   - Bar: visual structure, part of bulge
+    //   - Spiral Arms: tracers within thin disk, not separate mass
+    //
+    // Visual representation (balancing accuracy with visibility):
+    // 20% Bulge (Dense, Rugby Ball) - reduced from 26% for visual balance
+    // 3% Bar (Elongated) - visual structure
+    // 20% Spiral Arms (Young star-forming regions in thin disk)
+    // 40% Thin Disk (Background Population I) - majority of mass
+    // 15% Thick Disk (Older Population II)
+    // 2% Halo (Ancient, metal-poor) - scientifically accurate
     
-    int bulge_count = star_count * 15 / 100;
-    int bar_count = star_count * 10 / 100;
-    int arm_count = star_count * 40 / 100;
-    int thin_disk_count = star_count * 15 / 100;
-    int thick_disk_count = star_count * 10 / 100;
-    // Remainder is halo
+    int bulge_count = star_count * 20 / 100;
+    int bar_count = star_count * 3 / 100;
+    int arm_count = star_count * 20 / 100;
+    int thin_disk_count = star_count * 40 / 100;
+    int thick_disk_count = star_count * 15 / 100;
+    // Remainder is halo (~2%)
     
     int idx = 0;
     
@@ -376,7 +391,7 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         float min_r = BAR_LENGTH * 0.5f;
         float r = min_r + powf(rand_float(0, 1), 0.5) * (GALAXY_RADIUS - min_r);
         
-        float spiral_theta = logf(r / min_r) / ARM_TIGHTNESS + arm_start;
+        float spiral_theta = logf(r / min_r) / ARM_PITCH_ANGLES[arm] + arm_start;
         
         float arm_width = 0.3f + (r / GALAXY_RADIUS) * 0.5f;
         float arm_scatter = rand_float(-arm_width, arm_width);
