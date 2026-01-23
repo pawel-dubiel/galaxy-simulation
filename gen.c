@@ -418,23 +418,48 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7;
         
-        // ARMS: Young, hot stars (O/B associations).
-        // Some VERY bright blue/white stars, others average.
-        // We want accurate "clumping" of brightness if possible, but random is okay for now.
+        // ARMS: Bimodal distribution - many dim M-dwarfs + rare bright O/B stars
+        // This matches real star-forming regions
+        int star_class = rand() % 1000;
+        int brightness;
+        int r_col, g_col, b_col;
         
-        if (rand() % 20 == 0) {
-            // Supergiant / O-Star Cluster (Very Bright, Blue)
-            int b = 240 + rand() % 15;
-            s->color = ((b - 30) << 24) | ((b - 10) << 16) | (b << 8) | 0xFF;
-        } else if (rand() % 5 == 0) {
-           // Bright Main Sequence (A/F stars, White)
-            int b = 220 + rand() % 35;
-            s->color = (b << 24) | (b << 16) | (b << 8) | 0xFF; // Pure white
+        if (star_class < 2) {
+            // O-type Supergiant (0.2%) - EXTREMELY bright, blue
+            brightness = 245 + rand() % 10;
+            r_col = (int)(brightness * 0.75f);
+            g_col = (int)(brightness * 0.90f);
+            b_col = brightness;
+        } else if (star_class < 15) {
+            // B-type stars (1.3%) - Very bright, blue-white
+            brightness = 200 + rand() % 50;
+            r_col = (int)(brightness * 0.85f);
+            g_col = (int)(brightness * 0.95f);
+            b_col = brightness;
+        } else if (star_class < 50) {
+            // A/F stars (3.5%) - Bright, white
+            brightness = 150 + rand() % 80;
+            r_col = brightness; g_col = brightness; b_col = brightness;
+        } else if (star_class < 120) {
+            // G-type Sun-like (7%) - Moderate, yellow
+            brightness = generate_imf_brightness(60, 150, 1.5f);
+            r_col = brightness;
+            g_col = (int)(brightness * 0.95f);
+            b_col = (int)(brightness * 0.7f);
+        } else if (star_class < 240) {
+            // K-dwarfs (12%) - Dim, orange
+            brightness = generate_imf_brightness(30, 100, 2.0f);
+            r_col = brightness;
+            g_col = (int)(brightness * 0.75f);
+            b_col = (int)(brightness * 0.4f);
         } else {
-            // Background arm population (B-F stars, Blue-White)
-            int b = 180 + rand() % 50;
-            s->color = ((b - 40) << 24) | ((b - 10) << 16) | (b << 8) | 0xFF;
+            // M-dwarfs (76%) - Very dim, red
+            brightness = generate_imf_brightness(15, 70, 2.5f);
+            r_col = brightness;
+            g_col = (int)(brightness * 0.55f);
+            b_col = (int)(brightness * 0.3f);
         }
+        s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
         
         s->star_id = idx;
         s->seed = get_seed_from_id(s->star_id);
