@@ -324,19 +324,21 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_speed = V_FLAT * (r / BULGE_RADIUS) * 0.5 / (r * 3.086e16) * 3.154e7;
         
-        // BULGE: Old, metal-rich giants. High surface brightness.
-        // Extremely bright core, yellow-white.
-        // Brightness decays with distance from center (3D)
+        // BULGE: Old metal-rich giants with IMF-based brightness
+        // Power-law: many dim K/M giants, few bright red giants
         float dist_3d = sqrtf(lx*lx + ly*ly + lz*lz);
-        int base_bright = 230 + rand() % 25;
-        float r_factor = 1.0f - (dist_3d / (BULGE_RADIUS * 2.0f)) * 0.5f; 
-        if (r_factor < 0.2) r_factor = 0.2;
+        float r_factor = 1.0f - (dist_3d / (BULGE_RADIUS * 2.0f)) * 0.4f;
+        if (r_factor < 0.3) r_factor = 0.3;
+        int base_bright = generate_imf_brightness(60, 255, 1.5f); // Less steep - bulge has evolved giants
         int final_bright = (int)(base_bright * r_factor);
         if (final_bright > 255) final_bright = 255;
+        if (final_bright < 30) final_bright = 30; // Bulge has minimum surface brightness
         
-        // Color: Warm Yellow/White (4000K - 5000K)
-        // R=255, G=200-240, B=100-180
-        s->color = (final_bright << 24) | ((final_bright - 20) << 16) | ((final_bright - 80) << 8) | 0xFF;
+        // Color: Warm Yellow/Orange (old K/M giants)
+        int r_col = final_bright;
+        int g_col = (int)(final_bright * 0.85f);
+        int b_col = (int)(final_bright * 0.5f);
+        s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
         
         s->star_id = idx;
         s->seed = get_seed_from_id(s->star_id);
@@ -375,11 +377,13 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         float pattern_speed = V_FLAT * 0.4 / (BAR_LENGTH * 3.086e16) * 3.154e7;
         s->orbit_speed = pattern_speed + (V_FLAT / (r * 3.086e16) * 3.154e7 - pattern_speed) * 0.3;
         
-        // BAR: Similar to bulge but transitioning to disk.
-        // Good brightness, warm colors.
-        int brightness = 200 + rand() % 55;
-        // slightly less yellow than bulge
-        s->color = (brightness << 24) | ((brightness - 30) << 16) | ((brightness - 60) << 8) | 0xFF;
+        // BAR: Mixed population - old bulge-like + younger disk stars
+        // Power-law brightness, orange-yellow colors
+        int brightness = generate_imf_brightness(40, 230, 1.8f);
+        int r_col = brightness;
+        int g_col = (int)(brightness * 0.80f);
+        int b_col = (int)(brightness * 0.45f);
+        s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
         
         s->star_id = idx;
         s->seed = get_seed_from_id(s->star_id);
@@ -454,16 +458,19 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7;
         
-        // DISK: Dimmer background stars.
-        // Apply radial brightness gradient (brighter near center)
-        float radial_boost = 1.0f + (1.0f - (r / GALAXY_RADIUS)) * 0.5f;
+        // THIN DISK: IMF-weighted - mostly dim M-dwarfs with radial gradient
+        float radial_boost = 1.0f + (1.0f - (r / GALAXY_RADIUS)) * 0.3f;
         
-        int base = 100 + rand() % 100;
+        // Steep power-law: most stars very dim (M-dwarfs dominate)
+        int base = generate_imf_brightness(15, 160, 2.2f);
         int brightness = (int)(base * radial_boost);
         if (brightness > 255) brightness = 255;
         
-        // Slightly yellow/orange (Sun-like)
-        s->color = (brightness << 24) | ((brightness - 20) << 16) | ((brightness - 40) << 8) | 0xFF;
+        // Yellow-orange tint (K/M dwarf population)
+        int r_col = brightness;
+        int g_col = (int)(brightness * 0.80f);
+        int b_col = (int)(brightness * 0.55f);
+        s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
         
         s->star_id = idx;
         s->seed = get_seed_from_id(s->star_id);
@@ -489,15 +496,17 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7 * 0.9; // Slightly slower lag
         
-        // Dimmer, Orange/Red
-        int base = 80 + rand() % 80;
-        // Radial gradient
-        float radial_boost = 1.0f + (1.0f - (r / GALAXY_RADIUS)) * 0.4f;
-         int brightness = (int)(base * radial_boost);
+        // THICK DISK: Old Population II - dim K/M dwarfs and red giants
+        float radial_boost = 1.0f + (1.0f - (r / GALAXY_RADIUS)) * 0.3f;
+        int base = generate_imf_brightness(12, 110, 2.5f); // Very steep - old, dim
+        int brightness = (int)(base * radial_boost);
         if (brightness > 255) brightness = 255;
         
-        // Stronger Orange/Red tint for old population
-        s->color = (brightness << 24) | ((brightness - 30) << 16) | ((brightness - 60) << 8) | 0xFF;
+        // Strong orange-red tint (old K/M population)
+        int r_col = brightness;
+        int g_col = (int)(brightness * 0.65f);
+        int b_col = (int)(brightness * 0.35f);
+        s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
         
         s->star_id = idx;
         s->seed = get_seed_from_id(s->star_id);
@@ -534,11 +543,14 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_speed = V_FLAT / (MAX(r, 0.1) * 3.086e16) * 3.154e7 * rand_float(0.5, 1.2);
         
-        // Very Dim
-        int brightness = 50 + rand() % 50; 
+        // HALO: Ancient metal-poor stars - very dim red dwarfs/giants
+        int brightness = generate_imf_brightness(8, 60, 3.0f); // Extremely steep - ancient, dim
         
-        // Reddish
-        s->color = (brightness << 24) | ((brightness - 10) << 16) | ((brightness - 40) << 8) | 0xFF;
+        // Deep red tint (very old metal-poor population)
+        int r_col = brightness;
+        int g_col = (int)(brightness * 0.50f);
+        int b_col = (int)(brightness * 0.25f);
+        s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
         
         s->star_id = idx;
         s->seed = get_seed_from_id(s->star_id);
