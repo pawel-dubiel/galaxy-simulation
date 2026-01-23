@@ -246,6 +246,20 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
     const float V_FLAT = 220.0f;            // Rotation velocity km/s
     const float BAR_ANGLE = 0.45f;          // Angle of the bar
     
+    // === GALACTIC WARP PARAMETERS ===
+    // The disk warps up on one side, down on the other (like an S-curve)
+    // Warp is caused by dark matter halo torque or satellite galaxy interactions
+    const float WARP_AMPLITUDE = 3.0f;      // Max warp displacement in kLY
+    const float WARP_START_RADIUS = 20.0f;  // Warp begins at ~20 kLY from center
+    const float WARP_ANGLE = 1.2f;          // Orientation angle of warp axis
+    
+    // === DISK FLARING PARAMETERS ===
+    // Disk gets thicker at larger radii
+    const float FLARE_SCALE = 0.08f;        // How fast disk thickens with radius
+    
+    // === NUCLEAR STAR CLUSTER ===
+    const float NSC_RADIUS = 0.03f;         // ~30 pc = 0.03 kLY (very dense core)
+    
     // Spiral arm parameters (4 main arms)
     // Arms start from ends of the bar
     // Individual pitch angles based on scientific measurements (converted to tightness = tan(pitch))
@@ -268,21 +282,74 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
     //   - Spiral Arms: tracers within thin disk, not separate mass
     //
     // Visual representation (balancing accuracy with visibility):
-    // 20% Bulge (Dense, Rugby Ball) - reduced from 26% for visual balance
+    // 1% Nuclear Star Cluster (extremely dense core around Sgr A*)
+    // 19% Bulge (Dense, Rugby Ball)
     // 3% Bar (Elongated) - visual structure
-    // 20% Spiral Arms (Young star-forming regions in thin disk)
+    // 18% Spiral Arms (Young star-forming regions in thin disk)
+    // 2% Nebulae/Star Formation Regions (in spiral arms)
     // 40% Thin Disk (Background Population I) - majority of mass
     // 15% Thick Disk (Older Population II)
     // 2% Halo (Ancient, metal-poor) - scientifically accurate
     
-    int bulge_count = star_count * 20 / 100;
+    int nsc_count = star_count * 1 / 100;       // Nuclear Star Cluster
+    int bulge_count = star_count * 19 / 100;
     int bar_count = star_count * 3 / 100;
-    int arm_count = star_count * 20 / 100;
+    int arm_count = star_count * 18 / 100;
+    int nebula_count = star_count * 2 / 100;    // Star formation regions
     int thin_disk_count = star_count * 40 / 100;
     int thick_disk_count = star_count * 15 / 100;
     // Remainder is halo (~2%)
     
     int idx = 0;
+    
+    // ===== NUCLEAR STAR CLUSTER (Sgr A* vicinity) =====
+    // Extremely dense cluster of ~500,000 stars within 30 parsecs of black hole
+    for (int i = 0; i < nsc_count && idx < star_count; i++, idx++) {
+        GalaxyStar *s = &galaxy->stars[idx];
+        
+        // Very tight distribution around center
+        float u = rand_float(0.001, 1.0);
+        float d = -logf(u) * NSC_RADIUS * 0.5f;  // Exponential falloff
+        if (d > NSC_RADIUS * 2.0f) d = rand_float(0, NSC_RADIUS);
+        
+        float theta = rand_float(0, 6.28318530718f);
+        float phi = acosf(rand_float(-1, 1));
+        
+        // Slightly flattened sphere
+        float x = d * sinf(phi) * cosf(theta);
+        float y = d * sinf(phi) * sinf(theta);
+        float z = d * cosf(phi) * 0.7f;  // Flattened
+        
+        s->orbit_radius = sqrtf(x*x + y*y);
+        s->orbit_angle = atan2f(y, x);
+        s->z_offset = z;
+        
+        // Very fast orbital speeds near black hole
+        float r_safe = s->orbit_radius > 0.001f ? s->orbit_radius : 0.001f;
+        s->orbit_speed = V_FLAT * 5.0f / (r_safe * 3.086e16) * 3.154e7;
+        
+        // NUCLEAR CLUSTER: Old but very bright due to crowding
+        // Mix of red giants and some blue stragglers
+        int brightness;
+        if (rand() % 20 == 0) {
+            // Blue straggler (rare, very bright)
+            brightness = 230 + rand() % 25;
+            int r_col = (int)(brightness * 0.8f);
+            int g_col = (int)(brightness * 0.95f);
+            int b_col = brightness;
+            s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
+        } else {
+            // Orange/yellow giants
+            brightness = generate_imf_brightness(100, 255, 1.0f); // Less steep - dense, bright
+            int r_col = brightness;
+            int g_col = (int)(brightness * 0.80f);
+            int b_col = (int)(brightness * 0.45f);
+            s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
+        }
+        
+        s->star_id = idx;
+        s->seed = get_seed_from_id(s->star_id);
+    }
     
     // ===== NUCLEAR BULGE (Prolate / Rugby Ball Shape) =====
     // Structurally aligned with the bar, but thicker
@@ -414,7 +481,18 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_radius = r;
         s->orbit_angle = spiral_theta + arm_scatter;
-        s->z_offset = rand_float(-DISK_THICKNESS/2, DISK_THICKNESS/2);
+        
+        // Apply disk flaring (thicker at outer radii) and galactic warp
+        float flare_factor = 1.0f + FLARE_SCALE * (r - BAR_LENGTH);
+        float local_thickness = DISK_THICKNESS * flare_factor;
+        s->z_offset = rand_float(-local_thickness/2, local_thickness/2);
+        
+        // Add galactic warp beyond WARP_START_RADIUS
+        if (r > WARP_START_RADIUS) {
+            float warp_strength = (r - WARP_START_RADIUS) / (GALAXY_RADIUS - WARP_START_RADIUS);
+            float warp_z = WARP_AMPLITUDE * warp_strength * sinf(spiral_theta + arm_scatter - WARP_ANGLE);
+            s->z_offset += warp_z;
+        }
         
         s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7;
         
@@ -465,6 +543,54 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         s->seed = get_seed_from_id(s->star_id);
     }
     
+    // ===== STAR FORMATION REGIONS (Nebulae / HII Regions) =====
+    // Pink/red glowing clouds in spiral arms - sites of active star formation
+    for (int i = 0; i < nebula_count && idx < star_count; i++, idx++) {
+        GalaxyStar *s = &galaxy->stars[idx];
+        
+        // Position along spiral arms (same as arm stars)
+        int arm = rand() % 4;
+        float arm_start;
+        if (arm == 0) arm_start = BAR_ANGLE;
+        else if (arm == 1) arm_start = BAR_ANGLE + 1.5707963f;
+        else if (arm == 2) arm_start = BAR_ANGLE + 3.14159f;
+        else arm_start = BAR_ANGLE + 4.712389f;
+        
+        // Preferentially placed at mid-radius (most active star formation)
+        float min_r = BAR_LENGTH * 0.5f;
+        float r = min_r + rand_float(0.2f, 0.7f) * (GALAXY_RADIUS - min_r);
+        
+        float spiral_theta = logf(r / min_r) / ARM_PITCH_ANGLES[arm] + arm_start;
+        float arm_scatter = rand_float(-0.15f, 0.15f);  // Tighter clustering than normal stars
+        
+        s->orbit_radius = r;
+        s->orbit_angle = spiral_theta + arm_scatter;
+        
+        // Apply disk flaring and warp (same as other disk stars)
+        float flare_factor = 1.0f + FLARE_SCALE * (r - BAR_LENGTH);
+        float local_thickness = DISK_THICKNESS * flare_factor * 0.5f;  // Thinner - gas clouds
+        s->z_offset = rand_float(-local_thickness/2, local_thickness/2);
+        
+        if (r > WARP_START_RADIUS) {
+            float warp_strength = (r - WARP_START_RADIUS) / (GALAXY_RADIUS - WARP_START_RADIUS);
+            float warp_z = WARP_AMPLITUDE * warp_strength * sinf(spiral_theta + arm_scatter - WARP_ANGLE);
+            s->z_offset += warp_z;
+        }
+        
+        s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7;
+        
+        // NEBULAE: Pink/magenta emission nebulae (HII regions ionized by young stars)
+        // Very bright, distinctive pink/red color from hydrogen alpha emission
+        int brightness = 180 + rand() % 75;
+        int r_col = brightness;
+        int g_col = (int)(brightness * 0.35f);  // Low green for pink
+        int b_col = (int)(brightness * 0.65f);  // Some blue for magenta tint
+        s->color = (r_col << 24) | (g_col << 16) | (b_col << 8) | 0xFF;
+        
+        s->star_id = idx;
+        s->seed = get_seed_from_id(s->star_id);
+    }
+    
     // ===== THIN DISK (Background Population I) =====
     for (int i = 0; i < thin_disk_count && idx < star_count; i++, idx++) {
         GalaxyStar *s = &galaxy->stars[idx];
@@ -479,7 +605,18 @@ void init_galaxy(Galaxy *galaxy, int star_count) {
         
         s->orbit_radius = r;
         s->orbit_angle = theta;
-        s->z_offset = rand_float(-DISK_THICKNESS/2, DISK_THICKNESS/2);
+        
+        // Apply disk flaring (thicker at outer radii) and galactic warp
+        float flare_factor = 1.0f + FLARE_SCALE * (r - BAR_LENGTH);
+        float local_thickness = DISK_THICKNESS * flare_factor;
+        s->z_offset = rand_float(-local_thickness/2, local_thickness/2);
+        
+        // Add galactic warp beyond WARP_START_RADIUS
+        if (r > WARP_START_RADIUS) {
+            float warp_strength = (r - WARP_START_RADIUS) / (GALAXY_RADIUS - WARP_START_RADIUS);
+            float warp_z = WARP_AMPLITUDE * warp_strength * sinf(theta - WARP_ANGLE);
+            s->z_offset += warp_z;
+        }
         
         s->orbit_speed = V_FLAT / (r * 3.086e16) * 3.154e7;
         
