@@ -254,16 +254,19 @@ int main(int argc, char* argv[]) {
     // Initialize trig lookup tables for fast galaxy rotation
     init_trig_tables();
     
+    // Parse command line arguments (before galaxy init)
+    int galaxy_star_count = 15000; // Default
+    for (int i=1; i<argc; i++) {
+        if (strncmp(argv[i], "--galaxy-stars=", 15) == 0) galaxy_star_count = atoi(argv[i] + 15);
+        if (strncmp(argv[i], "--stars=", 8) == 0) set_forced_star_count(atoi(argv[i] + 8));
+    }
+    
     // Initialize Galaxy
-    init_galaxy(&state.galaxy, 150000);
+    init_galaxy(&state.galaxy, galaxy_star_count);
     
     // Init Texture
     state.body_texture = create_circle_texture(renderer, 4);
     if (!state.body_texture) printf("Failed to create texture\n");
-    
-    for (int i=1; i<argc; i++) {
-        if (strncmp(argv[i], "--stars=", 8) == 0) set_forced_star_count(atoi(argv[i] + 8));
-    }
 
     SDL_Event e;
     Uint32 last_time = SDL_GetTicks();
