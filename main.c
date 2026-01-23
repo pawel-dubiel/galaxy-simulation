@@ -293,30 +293,48 @@ int main(int argc, char* argv[]) {
                         float min_pixel_dist = 15.0f; // Max click distance in pixels
                         int clicked_star_idx = -1;
                         
-                        for (int i = 0; i < state.galaxy.star_count; i++) {
-                            GalaxyStar *gs = &state.galaxy.stars[i];
+                        // OPTIMIZATION: Use spatial grid for O(1) click detection
+                        // Only check stars in the 3x3 grid neighborhood around click position
+                        int cell_size = (int)state.click_grid.cell_size;
+                        if (cell_size > 0) {
+                            int gx = mx / cell_size;
+                            int gy = my / cell_size;
                             
-                            // Calculate current 3D position (same as rendering)
-                            float current_angle = gs->orbit_angle + gs->orbit_speed * state.galaxy.time;
-                            float x_3d = cosf(current_angle) * gs->orbit_radius;
-                            float y_3d = sinf(current_angle) * gs->orbit_radius;
-                            float z_3d = gs->z_offset;
-                            
-                            // Apply tilt transformation (same as rendering)
-                            float y_tilted = y_3d * cos_tilt - z_3d * sin_tilt;
-                            
-                            // Project to screen coordinates (same as rendering)
-                            int sx = (x_3d - state.map_cam_pos.x) * scale + SCREEN_WIDTH/2;
-                            int sy = (y_tilted - state.map_cam_pos.y) * scale + SCREEN_HEIGHT/2;
-                            
-                            // Compare in screen pixel space
-                            float dx = sx - mx;
-                            float dy = sy - my;
-                            float pixel_dist = sqrtf(dx*dx + dy*dy);
-                            
-                            if (pixel_dist < min_pixel_dist) {
-                                min_pixel_dist = pixel_dist;
-                                clicked_star_idx = i;
+                            for (int dx = -1; dx <= 1; dx++) {
+                                for (int dy = -1; dy <= 1; dy++) {
+                                    int cx = gx + dx;
+                                    int cy = gy + dy;
+                                    if (cx < 0 || cx >= SPATIAL_GRID_SIZE || cy < 0 || cy >= SPATIAL_GRID_SIZE) continue;
+                                    
+                                    SpatialCell *cell = &state.click_grid.cells[cx][cy];
+                                    for (int j = 0; j < cell->count; j++) {
+                                        int i = cell->star_indices[j];
+                                        GalaxyStar *gs = &state.galaxy.stars[i];
+                                        
+                                        // Calculate current 3D position (same as rendering)
+                                        float current_angle = gs->orbit_angle + gs->orbit_speed * state.galaxy.time;
+                                        float x_3d = fast_cos(current_angle) * gs->orbit_radius;
+                                        float y_3d = fast_sin(current_angle) * gs->orbit_radius;
+                                        float z_3d = gs->z_offset;
+                                        
+                                        // Apply tilt transformation (same as rendering)
+                                        float y_tilted = y_3d * cos_tilt - z_3d * sin_tilt;
+                                        
+                                        // Project to screen coordinates (same as rendering)
+                                        int sx = (x_3d - state.map_cam_pos.x) * scale + SCREEN_WIDTH/2;
+                                        int sy = (y_tilted - state.map_cam_pos.y) * scale + SCREEN_HEIGHT/2;
+                                        
+                                        // Compare in screen pixel space
+                                        float pdx = sx - mx;
+                                        float pdy = sy - my;
+                                        float pixel_dist = sqrtf(pdx*pdx + pdy*pdy);
+                                        
+                                        if (pixel_dist < min_pixel_dist) {
+                                            min_pixel_dist = pixel_dist;
+                                            clicked_star_idx = i;
+                                        }
+                                    }
+                                }
                             }
                         }
                         
