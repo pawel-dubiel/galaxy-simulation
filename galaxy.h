@@ -106,6 +106,20 @@ typedef struct {
     float time;              // Galaxy simulation time (years)
 } Galaxy;
 
+// Spatial Grid for Click Detection Optimization
+#define SPATIAL_GRID_SIZE 64
+#define SPATIAL_CELL_CAPACITY 32
+
+typedef struct {
+    int star_indices[SPATIAL_CELL_CAPACITY];
+    int count;
+} SpatialCell;
+
+typedef struct {
+    SpatialCell cells[SPATIAL_GRID_SIZE][SPATIAL_GRID_SIZE];
+    float cell_size;
+} SpatialGrid;
+
 
 // Ship (6-DOF)
 typedef struct {
@@ -154,7 +168,19 @@ typedef struct {
     StarSystem *visited_systems;
     int visited_count;
     int visited_capacity;
+    
+    // Spatial Grid for Click Detection (updated each frame)
+    SpatialGrid click_grid;
 } GameState;
+
+// Trig Lookup Tables (for galaxy rotation optimization)
+#define TRIG_TABLE_SIZE 4096
+extern float g_sin_table[TRIG_TABLE_SIZE];
+extern float g_cos_table[TRIG_TABLE_SIZE];
+
+void init_trig_tables(void);
+float fast_sin(float angle);
+float fast_cos(float angle);
 
 // Functions
 unsigned int get_seed_from_id(int star_id);
