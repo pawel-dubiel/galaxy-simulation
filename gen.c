@@ -19,6 +19,35 @@ void set_forced_star_count(int count) {
     g_forced_star_count = count;
 }
 
+// Trig Lookup Tables for fast galaxy rotation
+float g_sin_table[TRIG_TABLE_SIZE];
+float g_cos_table[TRIG_TABLE_SIZE];
+
+void init_trig_tables(void) {
+    for (int i = 0; i < TRIG_TABLE_SIZE; i++) {
+        float angle = (float)i / TRIG_TABLE_SIZE * 6.28318530718f;
+        g_sin_table[i] = sinf(angle);
+        g_cos_table[i] = cosf(angle);
+    }
+}
+
+float fast_sin(float angle) {
+    // Normalize to [0, 2π)
+    const float TWO_PI = 6.28318530718f;
+    angle = fmodf(angle, TWO_PI);
+    if (angle < 0) angle += TWO_PI;
+    int idx = (int)(angle / TWO_PI * TRIG_TABLE_SIZE) % TRIG_TABLE_SIZE;
+    return g_sin_table[idx];
+}
+
+float fast_cos(float angle) {
+    const float TWO_PI = 6.28318530718f;
+    angle = fmodf(angle, TWO_PI);
+    if (angle < 0) angle += TWO_PI;
+    int idx = (int)(angle / TWO_PI * TRIG_TABLE_SIZE) % TRIG_TABLE_SIZE;
+    return g_cos_table[idx];
+}
+
 void generate_resources(Planet *p, float metallicity) {
     for(int i=0; i<8; i++) p->resources[i] = 0.0f;
     float metal_boost = powf(10.0, metallicity);

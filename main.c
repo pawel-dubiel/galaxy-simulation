@@ -250,8 +250,11 @@ int main(int argc, char* argv[]) {
     
     init_cache(&state);
     
+    // Initialize trig lookup tables for fast galaxy rotation
+    init_trig_tables();
+    
     // Initialize Galaxy
-    init_galaxy(&state.galaxy, 50000);
+    init_galaxy(&state.galaxy, 150000);
     
     // Init Texture
     state.body_texture = create_circle_texture(renderer, 4);
