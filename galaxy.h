@@ -81,7 +81,7 @@ typedef struct {
 } Planet;
 
 typedef struct {
-    int x, y; 
+    int star_id;             // Unique star identifier
     unsigned int seed;
     int star_count;
     Star stars[3];
@@ -97,7 +97,7 @@ typedef struct {
     float orbit_speed;        // Angular velocity (rad/year)
     float z_offset;           // Vertical offset from galactic plane (kLY)
     Uint32 color;            // Star color for rendering
-    int grid_x, grid_y;      // Original grid coordinates for system generation
+    int star_id;             // Unique star identifier for system generation
 } GalaxyStar;
 
 typedef struct {
@@ -157,9 +157,8 @@ typedef struct {
 } GameState;
 
 // Functions
-unsigned int get_seed(int x, int y);
-bool star_exists(int x, int y);
-StarSystem generate_system(int x, int y);
+unsigned int get_seed_from_id(int star_id);
+StarSystem generate_system(int star_id);
 float rand_float(float min, float max); 
 void set_forced_star_count(int count);
 void init_galaxy(Galaxy *galaxy, int star_count);
