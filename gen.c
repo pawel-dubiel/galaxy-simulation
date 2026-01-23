@@ -4,15 +4,10 @@
 #include <math.h>
 #include <stdio.h>
 
-unsigned int get_seed(int x, int y) {
-    unsigned int seed = (x * 73856093) ^ (y * 19349663);
+unsigned int get_seed_from_id(int star_id) {
+    // Use a good hash to generate reproducible seed from star_id
+    unsigned int seed = (star_id * 2654435761u) ^ (star_id * 73856093);
     return seed;
-}
-
-bool star_exists(int x, int y) {
-    unsigned int seed = get_seed(x, y);
-    srand(seed);
-    return (rand() % 100) < 5; 
 }
 
 float rand_float(float min, float max) {
@@ -50,10 +45,10 @@ void generate_resources(Planet *p, float metallicity) {
     if (total > 0) for(int i=0; i<8; i++) p->resources[i] = (weights[i] / total) * 100.0;
 }
 
-StarSystem generate_system(int x, int y) {
+StarSystem generate_system(int star_id) {
     StarSystem sys;
-    sys.x = x; sys.y = y;
-    sys.seed = get_seed(x, y);
+    sys.star_id = star_id;
+    sys.seed = get_seed_from_id(star_id);
     srand(sys.seed);
 
     if (g_forced_star_count > 0) sys.star_count = g_forced_star_count;
