@@ -280,27 +280,38 @@ int main(int argc, char* argv[]) {
                     if (e.button.button == SDL_BUTTON_LEFT) {
                         int mx, my; SDL_GetMouseState(&mx, &my);
                         float scale = state.map_zoom * 10.0f;
-                        float wx = state.map_cam_pos.x + (mx - SCREEN_WIDTH/2) / scale;
-                        float wy = state.map_cam_pos.y + (my - SCREEN_HEIGHT/2) / scale;
                         
-                        // Find nearest star - tolerance decreases with zoom
-                        float min_dist = 2.0f / state.map_zoom + 0.1f;
+                        // Precompute tilt for click detection (must match rendering)
+                        float cos_tilt = cosf(state.map_tilt);
+                        float sin_tilt = sinf(state.map_tilt);
+                        
+                        // Use screen-space pixel distance for accurate click detection
+                        float min_pixel_dist = 15.0f; // Max click distance in pixels
                         int clicked_star_idx = -1;
                         
                         for (int i = 0; i < state.galaxy.star_count; i++) {
                             GalaxyStar *gs = &state.galaxy.stars[i];
                             
-                            // Calculate current position
+                            // Calculate current 3D position (same as rendering)
                             float current_angle = gs->orbit_angle + gs->orbit_speed * state.galaxy.time;
-                            float x_ly = cosf(current_angle) * gs->orbit_radius;
-                            float y_ly = sinf(current_angle) * gs->orbit_radius;
+                            float x_3d = cosf(current_angle) * gs->orbit_radius;
+                            float y_3d = sinf(current_angle) * gs->orbit_radius;
+                            float z_3d = gs->z_offset;
                             
-                            float dx = x_ly - wx;
-                            float dy = y_ly - wy;
-                            float dist = sqrtf(dx*dx + dy*dy);
+                            // Apply tilt transformation (same as rendering)
+                            float y_tilted = y_3d * cos_tilt - z_3d * sin_tilt;
                             
-                            if (dist < min_dist) {
-                                min_dist = dist;
+                            // Project to screen coordinates (same as rendering)
+                            int sx = (x_3d - state.map_cam_pos.x) * scale + SCREEN_WIDTH/2;
+                            int sy = (y_tilted - state.map_cam_pos.y) * scale + SCREEN_HEIGHT/2;
+                            
+                            // Compare in screen pixel space
+                            float dx = sx - mx;
+                            float dy = sy - my;
+                            float pixel_dist = sqrtf(dx*dx + dy*dy);
+                            
+                            if (pixel_dist < min_pixel_dist) {
+                                min_pixel_dist = pixel_dist;
                                 clicked_star_idx = i;
                             }
                         }
